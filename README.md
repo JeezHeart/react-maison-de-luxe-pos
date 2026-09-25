@@ -40,6 +40,7 @@ fully on `localStorage` — it just doesn't sync.
 | **Customer directory** | Manager-only add/edit/delete/search of customers; checkout autocompletes names (synced) |
 | **Cloud sync** | Placed orders, menu, customers, and settings sync to Supabase when online; queue retries on reconnect |
 | **Staff accounts** | Login with `cashier / 123456` or `manager / admin123` (Supabase Auth, username→email mapping) |
+| **PWA / offline-first** | Installable app (manifest + service worker): the whole POS opens with zero network after the first visit, then its local-first sync kicks back in when back online |
 
 ---
 
@@ -141,6 +142,7 @@ npm run seed:auth       # demo staff accounts (cashier@ / manager@maison.de.luxe
 | `npm run seed:auth` | Create demo staff auth accounts + profiles (needs `SUPABASE_SECRET_KEY`) |
 | `npm run test:sync` | Full offline-first sync integration test against the live DB (40 checks) |
 | `npm run test:smoke` | Smoke test of the exact API path the browser uses (reads/writes) |
+| `npm run test:unit` | Vitest unit tests (cart oversell guard, order-id generator, stock math, date parsing) |
 
 `test:sync` and `test:smoke` load `.env` automatically and clean up after
 themselves (restore menu stock, delete probe rows).
@@ -199,6 +201,16 @@ public bundle, so a secret key there would be exposed to the world.
 - **Deletes are undoable** — deleting an order, menu item, or customer shows a
   4-second **Undo** toast that re-inserts the record locally and re-syncs it
   to the cloud. Deleting an order also returns the sold stock to inventory.
+- **Collision-safe order ids** — new orders no longer use "local max id + 1"
+  (which two registers could both mint and then lose one insert). Ids are
+  epoch-millis based with a per-device randomized counter, so multiple POS
+  devices can place orders simultaneously; the numeric id still sorts
+  newest-first and fits the `bigint` column.
+- **Stored timestamps parse anywhere** — the `"YYYY-MM-DD HH:mm:ss"` strings
+  are normalized before `new Date()` (Safari would otherwise return
+  Invalid Date), keeping order sorting/report buckets correct.
+- **System snapshot** — "Total Users" now reflects the live staff count from
+  the `profiles` table (falls back to the local estimate while offline).
 
 ---
 

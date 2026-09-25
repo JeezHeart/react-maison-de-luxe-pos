@@ -1,15 +1,17 @@
 import { create } from 'zustand';
 import { useMenuStore } from './menuStore.js';
-import { formatDateTime, round2 } from '../utils/format.js';
+import { formatDateTime, parseDate, round2 } from '../utils/format.js';
 import { useAuthStore } from './authStore.js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { enqueue } from '../lib/sync.js';
 
 export const STORAGE_KEY = 'luxury_pos_orders';
 
-// Single cashier account used across all orders.
+// Single cashier name for legacy/seed orders. USER_COUNT is the local
+// estimate shown by Settings while offline; when online, Settings queries
+// the auth profiles table for the live count (currently 2 staff accounts).
 export const CASHIER_NAME = 'Main Cashier';
-export const USER_COUNT = 1;
+export const USER_COUNT = 2;
 
 // ---------------------------------------------------------------------------
 // Seed orders — mock history so Orders / Reports / Recent Orders have content
@@ -121,6 +123,63 @@ function persist(orders) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Collision-safe order ids
+// ---------------------------------------------------------------------------
+// Orders used to be "local max id + 1" — two registers can mint the same id
+// for different orders and the second insert then fails the primary key, so
+// one device's sale silently never syncs. New ids are epoch-millis based with
+// a per-device randomized counter suffix: practically impossible for two
+// devices to collide, strictly monotonic per device (a persisted max keeps
+// ids increasing even across clock skew or a same-ms counter wrap), and well
+// inside both Number.MAX_SAFE_INTEGER (~9.0e15) and the bigint column.
+const ORDER_SEQ_KEY = 'luxury_pos_order_seq';
+const ORDER_LAST_KEY = 'luxury_pos_order_last_id';
+
+function loadOrderSeq() {
+  let seq = 0;
+  try {
+    seq = Number(localStorage.getItem(ORDER_SEQ_KEY));
+  } catch (e) {
+    // storage unavailable — fall through to random
+  }
+  if (!Number.isInteger(seq) || seq < 100 || seq > 999) {
+    seq = Math.floor(Math.random() * 900) + 100; // 100..999, fixed per device
+    try {
+      localStorage.setItem(ORDER_SEQ_KEY, String(seq));
+    } catch (e) {
+      // ignore
+    }
+  }
+  return seq;
+}
+
+export function nextOrderId() {
+  let seq = loadOrderSeq();
+  seq = seq >= 999 ? 100 : seq + 1;
+  try {
+    localStorage.setItem(ORDER_SEQ_KEY, String(seq));
+  } catch (e) {
+    // ignore — the id is still unique per millisecond
+  }
+  let id = Date.now() * 1000 + seq;
+  let lastId = 0;
+  try {
+    lastId = Number(localStorage.getItem(ORDER_LAST_KEY)) || 0;
+  } catch (e) {
+    // ignore
+  }
+  if (id <= lastId) {
+    id = lastId + 1;
+  }
+  try {
+    localStorage.setItem(ORDER_LAST_KEY, String(id));
+  } catch (e) {
+    // ignore
+  }
+  return id;
+}
+
 export const useOrderStore = create((set, get) => ({
   orders: loadOrders(),
 
@@ -170,7 +229,7 @@ export const useOrderStore = create((set, get) => ({
     changeAmount = null,
   }) {
     const orders = [...get().orders];
-    const nextId = orders.reduce((max, o) => Math.max(max, o.id), 0) + 1;
+    const nextId = nextOrderId();
     const currentUser = useAuthStore.getState().currentUser;
     const order = {
       id: nextId,
@@ -289,7 +348,7 @@ export const useOrderStore = create((set, get) => ({
         total_amount: Number(o.total_amount) || 0,
         payment_method: o.payment_method,
         order_status: o.order_status || 'Completed',
-        created_at: formatDateTime(new Date(o.created_at)),
+        created_at: formatDateTime(parseDate(o.created_at)),
         cashier_name: o.cashier_name || '',
         items: itemsByOrder.get(o.id) || [],
       }))

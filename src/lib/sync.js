@@ -21,7 +21,7 @@
 //     { table:'settings', action:'upsert', payload: { key, value } }
 
 import { supabase, isSupabaseConfigured } from './supabase.js';
-import { round2 } from '../utils/format.js';
+import { round2, parseDate } from '../utils/format.js';
 
 const QUEUE_KEY = 'luxury_pos_sync_queue';
 
@@ -64,7 +64,7 @@ export function enqueue(op) {
 // ---------------------------------------------------------------------------
 
 function toRemoteDate(value) {
-  const date = value instanceof Date ? value : new Date(value);
+  const date = parseDate(value);
   return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 }
 

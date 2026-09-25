@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Settings,
   Plus,
@@ -14,6 +14,7 @@ import { useUIStore } from '../stores/uiStore.js';
 import { useMenuStore } from '../stores/menuStore.js';
 import { useCustomerStore } from '../stores/customerStore.js';
 import { useAuthStore } from '../stores/authStore.js';
+import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { CUSTOMER_TIERS } from '../data/customers.js';
 import { getMenuImagePath } from '../utils/menu.js';
 import { formatPeso } from '../utils/format.js';
@@ -66,6 +67,28 @@ export default function SettingsSection() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerEditor, setCustomerEditor] = useState(null); // { mode, customer }
   const [customerEditorError, setCustomerEditorError] = useState('');
+
+  // "Total Users" — live count from the auth profiles table when online,
+  // falling back to the local estimate while offline / unconfigured.
+  const [userCount, setUserCount] = useState(USER_COUNT);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      setUserCount(USER_COUNT);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      const { count, error } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true });
+      if (alive && !error && count != null) {
+        setUserCount(count);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const handleSave = () => {
     saveSettings({ restaurantName, contact, address });
@@ -355,7 +378,7 @@ export default function SettingsSection() {
             <h6 className="mb-2">System Snapshot</h6>
             <div className="text-sm flex justify-between mb-1">
               <span className="text-muted">Total Users</span>
-              <strong>{USER_COUNT}</strong>
+              <strong>{userCount}</strong>
             </div>
             <div className="text-sm flex justify-between mb-1">
               <span className="text-muted">Menu Items</span>
