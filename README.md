@@ -36,7 +36,9 @@ fully on `localStorage` — it just doesn't sync.
 | **Orders** | Order history, order details, print receipt, delete orders, CSV export |
 | **Reports** | Sales stats, top-selling items, payment breakdown with date filters |
 | **Settings** | Restaurant profile + system snapshot |
-| **Cloud sync** | Placed orders, menu stock, and settings sync to Supabase when online; queue retries on reconnect |
+| **Menu manager** | Manager-only add/edit/delete of menu items and categories (synced) |
+| **Customer directory** | Manager-only add/edit/delete/search of customers; checkout autocompletes names (synced) |
+| **Cloud sync** | Placed orders, menu, customers, and settings sync to Supabase when online; queue retries on reconnect |
 | **Staff accounts** | Login with `cashier / 123456` or `manager / admin123` (Supabase Auth, username→email mapping) |
 
 ---
@@ -51,10 +53,10 @@ fully on `localStorage` — it just doesn't sync.
 │   │   ├── supabase.js     # Supabase client (null when unconfigured — local-only mode)
 │   │   ├── sync.js         # Sync queue (luxury_pos_sync_queue) + flush/pull/merge
 │   │   └── syncController.js # Scheduling: login/reconnect/30s + status toasts
-│   ├── stores/             # cartStore · orderStore · menuStore · settingsStore · authStore · uiStore
+│   ├── stores/             # cartStore · orderStore · menuStore · customerStore · settingsStore · authStore · uiStore
 │   ├── components/         # Sidebar · InvoicePanel · SyncStatus · ProductDetailModal · ...
 │   ├── pages/              # LandingPage · PosLayout · Login · Dashboard/Orders/Reports/Settings · ReceiptPage
-│   └── data/               # menu.js (48 items) · addons.js · imageFiles.js
+│   └── data/               # menu.js (48 items) · customers.js (15) · addons.js · imageFiles.js
 ├── supabase/migrations/    # 0001_initial_schema.sql (schema + RLS + grants)
 ├── scripts/                # seeders + integration tests (see below)
 ├── .env.example            # Committed template for Supabase credentials
