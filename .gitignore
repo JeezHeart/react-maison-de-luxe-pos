@@ -13,3 +13,8 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Local env files — never commit secrets
+.env
+.env.*
+!.env.example
