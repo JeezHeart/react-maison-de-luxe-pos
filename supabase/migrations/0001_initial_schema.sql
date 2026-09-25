@@ -130,6 +130,20 @@ grant select, insert, update, delete on
   to authenticated;
 grant usage, select on all sequences in schema public to authenticated;
 
+-- service_role keeps full programmatic access (REST tooling, seeding,
+-- the accounts seeder script). Projects with "automatically expose new
+-- tables" disabled do not grant these by default.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on
+  public.profiles,
+  public.menu_items,
+  public.orders,
+  public.order_items,
+  public.customers,
+  public.settings
+  to service_role;
+grant usage, select on all sequences in schema public to service_role;
+
 -- ---------------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------------

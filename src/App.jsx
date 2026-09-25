@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import LandingPage from './pages/LandingPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import AdminLayout from './pages/AdminLayout.jsx';
@@ -12,6 +13,7 @@ import ReceiptPage from './pages/ReceiptPage.jsx';
 import ProductDetailModal from './components/ProductDetailModal.jsx';
 import Toast from './components/Toast.jsx';
 import { useAuthStore } from './stores/authStore.js';
+import { startSyncController } from './lib/syncController.js';
 
 // Role gate — logged-out users go to /login; the wrong role gets bounced
 // to the correct home (managers -> /admin, cashiers -> /pos).
@@ -33,6 +35,14 @@ function RequireRole({ role, children }) {
 //   /pos          cashier-only register: Menu / Orders / Reports / Settings
 //   /receipt/:id  printable receipt (kept accessible for printing)
 export default function App() {
+  useEffect(() => {
+    // Restore a saved Supabase session (refresh keeps you signed in),
+    // then start the background sync controller. Both are no-ops when
+    // Supabase isn't configured — pure-local mode.
+    useAuthStore.getState().init();
+    startSyncController();
+  }, []);
+
   return (
     <>
       <Routes>

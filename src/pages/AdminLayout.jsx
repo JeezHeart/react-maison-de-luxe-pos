@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import SyncStatus from '../components/SyncStatus.jsx';
 
 // Admin shell — sidebar (Overview/Orders/Reports/Settings) + content card.
 // Managers oversee the business from here; the cashier register lives
@@ -12,6 +13,10 @@ export default function AdminLayout() {
 
         <div id="mainContentColumn" className="col-span-12 lg:col-span-10">
           <div className="content-card p-3 md:p-4">
+            <div className="flex items-center justify-between mb-3">
+              <SyncStatus />
+              <span />
+            </div>
             <Outlet />
           </div>
         </div>

@@ -35,4 +35,10 @@ export const useUIStore = create((set, get) => ({
   mobileInvoiceVisible: false,
   toggleMobileInvoice: () =>
     set((state) => ({ mobileInvoiceVisible: !state.mobileInvoiceVisible })),
+
+  // Cloud sync status: 'idle' | 'syncing' | 'online' | 'offline'.
+  // Purely local mode stays 'idle' forever.
+  syncState: 'idle',
+  lastSyncAt: null,
+  setSyncState: (syncState, lastSyncAt = null) => set({ syncState, lastSyncAt }),
 }));

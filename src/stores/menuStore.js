@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { MENU_CATEGORIES, MENU_ITEMS } from '../data/menu.js';
+import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
+import { enqueue } from '../lib/sync.js';
 
 // Editable menu catalog, persisted to localStorage. Seeded from the
 // bundled catalog on first run; every add/edit/delete is saved back so
@@ -77,6 +79,7 @@ export const useMenuStore = create((set, get) => ({
     const next = [...items, item];
     set({ items: next });
     persistMenu(get());
+    enqueue({ table: 'menu', action: 'upsert', payload: item });
     return item;
   },
 
@@ -96,12 +99,20 @@ export const useMenuStore = create((set, get) => ({
     });
     set({ items });
     persistMenu(get());
+    const updated = items.find((m) => m.id === id);
+    if (updated) {
+      enqueue({ table: 'menu', action: 'upsert', payload: updated });
+    }
   },
 
   deleteItem: (id) => {
+    const target = get().items.find((m) => m.id === id);
     const next = get().items.filter((m) => m.id !== id);
     set({ items: next });
     persistMenu(get());
+    if (target) {
+      enqueue({ table: 'menu', action: 'delete', name: target.name });
+    }
   },
 
   addCategory: (name) => {
@@ -131,6 +142,13 @@ export const useMenuStore = create((set, get) => ({
       items: get().items.map((m) => (m.category === oldName ? { ...m, category: next } : m)),
     });
     persistMenu(get());
+    // Categories are derived from the items' category column, so a rename
+    // syncs naturally as every moved item is re-uploaded by name.
+    for (const item of get().items) {
+      if (item.category === next) {
+        enqueue({ table: 'menu', action: 'upsert', payload: item });
+      }
+    }
     return true;
   },
 
@@ -148,6 +166,9 @@ export const useMenuStore = create((set, get) => ({
     const seed = cloneSeed();
     set({ categories: seed.categories, items: seed.items });
     persistMenu(get());
+    for (const item of seed.items) {
+      enqueue({ table: 'menu', action: 'upsert', payload: item });
+    }
   },
 
   // Decrement stock for the named item (used when an order is placed).
@@ -161,6 +182,39 @@ export const useMenuStore = create((set, get) => ({
           : m
       ),
     });
+    persistMenu(get());
+    const reduced = get().items.find((m) => m.name === String(name));
+    if (reduced) {
+      enqueue({ table: 'menu', action: 'upsert', payload: reduced });
+    }
+  },
+
+  // Pull the shared catalog into this device. Remote wins; local-only
+  // items are uploaded first by the controller.
+  syncFromRemote: async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      return;
+    }
+    const { data: rows, error } = await supabase
+      .from('menu_items')
+      .select('*')
+      .order('id');
+    if (error) {
+      throw error;
+    }
+    if (!rows || rows.length === 0) {
+      return;
+    }
+    const categories = [...new Set(rows.map((r) => r.category))];
+    const items = rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      category: r.category,
+      description: r.description || '',
+      price: Number(r.price) || 0,
+      stock: Number(r.stock) || 0,
+    }));
+    set({ categories, items });
     persistMenu(get());
   },
 }));

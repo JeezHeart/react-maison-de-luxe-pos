@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { useMenuStore } from './menuStore.js';
 import { formatDateTime, round2 } from '../utils/format.js';
 import { useAuthStore } from './authStore.js';
+import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
+import { enqueue } from '../lib/sync.js';
 
 export const STORAGE_KEY = 'luxury_pos_orders';
 
@@ -195,6 +197,8 @@ export const useOrderStore = create((set, get) => ({
     const next = [order, ...orders];
     set({ orders: next });
     persist(next);
+    // Queue the order for the shared database (uploaded when online).
+    enqueue({ table: 'orders', action: 'insert', payload: order });
     // Auto-deduct stock for the quantities just sold.
     for (const line of items) {
       useMenuStore.getState().reduceStock(line.name, line.qty);
@@ -206,6 +210,7 @@ export const useOrderStore = create((set, get) => ({
     const next = get().orders.filter((o) => o.id !== id);
     set({ orders: next });
     persist(next);
+    enqueue({ table: 'orders', action: 'delete', id });
   },
 
   // Move an order through the status pipeline (kanban board).
@@ -215,6 +220,7 @@ export const useOrderStore = create((set, get) => ({
     );
     set({ orders: next });
     persist(next);
+    enqueue({ table: 'orders', action: 'update', id, payload: { order_status: status } });
   },
 
   // Re-insert a previously deleted order (Undo delete). Orders are kept
@@ -226,7 +232,57 @@ export const useOrderStore = create((set, get) => ({
     const next = [...get().orders, order].sort((a, b) => b.id - a.id);
     set({ orders: next });
     persist(next);
+    enqueue({ table: 'orders', action: 'insert', payload: order });
   },
 
   getOrder: (id) => get().orders.find((o) => o.id === id),
+
+  // Pull the shared order history into this device. Remote wins; local
+  // rows that aren't in the database are uploaded first by the controller.
+  syncFromRemote: async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      return;
+    }
+    const { data: remoteOrders, error } = await supabase.from('orders').select('*');
+    if (error) {
+      throw error;
+    }
+    if (!remoteOrders || remoteOrders.length === 0) {
+      return;
+    }
+    const { data: remoteItems } = await supabase.from('order_items').select('*');
+    const itemsByOrder = new Map();
+    for (const row of remoteItems || []) {
+      if (!itemsByOrder.has(row.order_id)) {
+        itemsByOrder.set(row.order_id, []);
+      }
+      itemsByOrder.get(row.order_id).push({
+        name: row.name,
+        quantity: row.quantity,
+        unit_price: Number(row.unit_price),
+        subtotal: Number(row.subtotal),
+      });
+    }
+    const merged = remoteOrders
+      .map((o) => ({
+        id: o.id,
+        customer_name: o.customer_name,
+        order_type: o.order_type || 'Dine-in',
+        sub_total: o.sub_total != null ? Number(o.sub_total) : null,
+        discount_amount: Number(o.discount_amount) || 0,
+        discount_label: o.discount_label || '',
+        tax_amount: o.tax_amount != null ? Number(o.tax_amount) : null,
+        cash_tendered: o.cash_tendered != null ? Number(o.cash_tendered) : null,
+        change_amount: o.change_amount != null ? Number(o.change_amount) : null,
+        total_amount: Number(o.total_amount) || 0,
+        payment_method: o.payment_method,
+        order_status: o.order_status || 'Completed',
+        created_at: formatDateTime(new Date(o.created_at)),
+        cashier_name: o.cashier_name || '',
+        items: itemsByOrder.get(o.id) || [],
+      }))
+      .sort((a, b) => b.id - a.id);
+    set({ orders: merged });
+    persist(merged);
+  },
 }));

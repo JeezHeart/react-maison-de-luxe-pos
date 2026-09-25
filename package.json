@@ -7,7 +7,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed:business": "node scripts/seed-business.mjs",
+    "seed:auth": "node scripts/seed-auth.mjs",
+    "test:sync": "node scripts/test-sync-flow.mjs",
+    "test:smoke": "node scripts/smoke-test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.1",

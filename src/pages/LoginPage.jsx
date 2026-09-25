@@ -13,20 +13,27 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   if (currentUser) {
     return <Navigate to="/pos" replace />;
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const user = login({ username, password });
-    if (user) {
-      // Managers land on the admin dashboard; cashiers go straight to checkout.
-      navigate(user.role === 'manager' ? '/admin' : '/pos', { replace: true });
-    } else {
-      setError('Invalid username or password.');
-      setPassword('');
+    setSubmitting(true);
+    setError('');
+    try {
+      const user = await login({ username, password });
+      if (user) {
+        // Managers land on the admin dashboard; cashiers go straight to checkout.
+        navigate(user.role === 'manager' ? '/admin' : '/pos', { replace: true });
+      } else {
+        setError('Invalid username or password.');
+        setPassword('');
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -77,15 +84,15 @@ export default function LoginPage() {
 
           {error ? <div className="form-error mb-2">{error}</div> : null}
 
-          <button type="submit" className="place-order-btn w-full">
-            Sign In
+          <button type="submit" className="place-order-btn w-full" disabled={submitting}>
+            {submitting ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
 
         <div className="login-credentials mt-3">
           <strong>Demo accounts</strong>
           <div>
-            <span>Cashier</span> <code>cashier</code> / <code>1234</code>
+            <span>Cashier</span> <code>cashier</code> / <code>123456</code>
           </div>
           <div>
             <span>Manager</span> <code>manager</code> / <code>admin123</code>
