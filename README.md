@@ -95,6 +95,22 @@ attempting to open the other workspace bounces you back to your own.
 
 ---
 
+## CRUD Operations Matrix
+
+Every business entity supports full Create/Read/Update/Delete with offline-first sync:
+
+| Entity | Create | Read | Update | Delete | Notes |
+|--------|--------|------|--------|--------|-------|
+| **Menu Items** | ✅ Manager adds (name, category, description, price, stock) | ✅ All roles (dashboard, search, autocomplete) | ✅ Manager edits any field; auto-syncs to cloud | ✅ Manager deletes; 4s Undo toast; blocked if category not empty | Stock auto-deducted on order; restored on delete/undo |
+| **Categories** | ✅ Manager adds | ✅ Derived from items | ✅ Manager renames (cascades to items) | ✅ Manager deletes; blocked if items still in category | |
+| **Orders** | ✅ Cashier places (cart → invoice) | ✅ All roles (table, kanban, receipt, CSV) | ✅ Status drag-drop (Pending/Completed/Cancelled) | ✅ Cashier needs manager PIN; Manager direct; auto-restores stock | Collision-safe 16-digit IDs; 4s Undo toast |
+| **Order Items** | ✅ Auto-created with order | ✅ In order detail / receipt | — (immutable after creation) | ✅ Cascade-deleted with parent order | |
+| **Customers** | ✅ Manager adds (name, phone, email, tier, visits, spent) | ✅ Autocomplete at checkout; directory in Settings | ✅ Manager edits any field | ✅ Manager deletes; 4s Undo toast | Duplicate names rejected; tier: Bronze/Silver/Gold/Platinum |
+| **Settings** (profile) | — (seeded) | ✅ All roles | ✅ Cashier & Manager save name/contact/address | — | Synced to cloud key/value table |
+| **Staff (Auth)** | ✅ Via `npm run seed:auth` (Supabase Auth + profiles) | ✅ Login reads profile | — | — | Roles: cashier / manager |
+
+---
+
 ## Feature & Function Guide
 
 Everything below is grouped by the screen you see in the app. Each entry states
