@@ -38,7 +38,7 @@ fully on `localStorage` — it just doesn't sync.
 | **Settings** | Restaurant profile + system snapshot |
 | **Menu manager** | Manager-only add/edit/delete of menu items and categories (synced) |
 | **Customer directory** | Manager-only add/edit/delete/search of customers; checkout autocompletes names (synced) |
-| **Cloud sync** | Placed orders, menu, customers, and settings sync to Supabase when online; queue retries on reconnect |
+| **Cloud sync** | Placed orders, menu, customers, and settings sync to Supabase when online; queue retries on reconnect. New changes sync within ~1.2s across registers |
 | **Staff accounts** | Login with `cashier / 123456` or `manager / admin123` (Supabase Auth, username→email mapping) |
 | **PWA / offline-first** | Installable app (manifest + service worker): the whole POS opens with zero network after the first visit, then its local-first sync kicks back in when back online |
 
@@ -211,6 +211,20 @@ public bundle, so a secret key there would be exposed to the world.
   Invalid Date), keeping order sorting/report buckets correct.
 - **System snapshot** — "Total Users" now reflects the live staff count from
   the `profiles` table (falls back to the local estimate while offline).
+- **Near-instant register sync** — any queued change (sale, edit, delete,
+  undo) triggers a sync pass within ~1.2s, so multiple registers share stock
+  and history in near-real-time (the 30s periodic tick is the backstop).
+
+### One known limit: concurrent last-unit sales across registers
+
+The cart blocks overselling *per register* and the database clamps
+`stock >= 0`, but two registers that both still show stock `1` for the same
+item — **within the same ~1.2s sync window** — can both sell it. No order is
+ever lost or corrupted; the shared stock can just read one unit too high
+until a manual count corrects it. Fully closing that window needs a
+server-side atomic step (a Supabase SQL function/RPC or Realtime), i.e. a
+small migration applied from the Supabase dashboard — say the word and I'll
+hand you the exact SQL, or wire it up for you once the function exists.
 
 ---
 

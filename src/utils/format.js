@@ -4,12 +4,14 @@
 // as local wall time — that string form is NOT standard JS, and Safari would
 // return Invalid Date. Normalize the space separator to ISO "T" (still
 // local time) before parsing; ISO/timestamptz strings pass straight through.
+// Fractional seconds are trimmed to 3 digits because Postgres timestamptz
+// can emit six (e.g. "…05.123456+00:00"), which some engines reject.
 export function parseDate(value) {
   if (value instanceof Date) {
     return value;
   }
   if (typeof value === 'string' && value.trim()) {
-    const iso = value.trim().replace(' ', 'T');
+    const iso = value.trim().replace(' ', 'T').replace(/(\.\d{3})\d+/, '$1');
     const d = new Date(iso);
     if (!Number.isNaN(d.getTime())) {
       return d;

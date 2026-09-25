@@ -24,6 +24,11 @@ describe('parseDate', () => {
     expect(d.getTime()).toBe(Date.UTC(2024, 0, 15, 10, 30, 0));
   });
 
+  it('trims Postgres microsecond fractional digits', () => {
+    const d = parseDate('2024-01-15T10:30:00.123456+00:00');
+    expect(d.getTime()).toBe(Date.UTC(2024, 0, 15, 10, 30, 0, 123));
+  });
+
   it('passes Date instances through unchanged', () => {
     const now = new Date();
     expect(parseDate(now)).toBe(now);

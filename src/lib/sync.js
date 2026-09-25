@@ -57,6 +57,18 @@ export function enqueue(op) {
   const queue = readQueue();
   queue.push({ ...op, ts: Date.now() });
   writeQueue(queue);
+  for (const listener of queueListeners) {
+    listener();
+  }
+}
+
+// Listeners fired whenever new work lands in the queue, so the sync
+// controller can react within ~a second instead of waiting for its
+// periodic tick (keeps multiple registers near-real-time).
+const queueListeners = new Set();
+export function onQueueChange(listener) {
+  queueListeners.add(listener);
+  return () => queueListeners.delete(listener);
 }
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@
 // It's a no-op when Supabase isn't configured (pure-local mode).
 
 import { supabase, isSupabaseConfigured } from './supabase.js';
-import { flushQueue, enqueue, readQueue } from './sync.js';
+import { flushQueue, enqueue, readQueue, onQueueChange } from './sync.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useOrderStore } from '../stores/orderStore.js';
 import { useMenuStore } from '../stores/menuStore.js';
@@ -112,6 +112,23 @@ export function startSyncController() {
     return;
   }
   started = true;
+
+  // New queued work (order placed, edit, delete, undo, restock…) triggers a
+  // sync within ~1.2s instead of waiting for the 30s tick — two registers
+  // see each other's changes in near-real-time.
+  let queueSyncTimer = null;
+  onQueueChange(() => {
+    if (!useAuthStore.getState().currentUser) {
+      return;
+    }
+    if (queueSyncTimer) {
+      clearTimeout(queueSyncTimer);
+    }
+    queueSyncTimer = setTimeout(() => {
+      queueSyncTimer = null;
+      runSync('change');
+    }, 1200);
+  });
 
   window.addEventListener('online', () => runSync('online'));
   window.addEventListener('offline', () => useUIStore.getState().setSyncState('offline'));
