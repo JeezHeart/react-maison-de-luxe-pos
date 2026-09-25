@@ -1,20 +1,22 @@
 // End-to-end smoke test of the exact API path the browser app uses:
-// anon key + signed-in staff session (authenticated role).
-//   $env:SUPABASE_URL="https://xxxx.supabase.co"
-//   $env:SUPABASE_ANON_KEY="your_anon_key"
-//   node scripts/smoke-test.mjs
+// publishable/anon key + signed-in staff session (authenticated role).
+//   node scripts/smoke-test.mjs   (loads .env automatically)
 
 import { createClient } from '@supabase/supabase-js';
 
-const url = process.env.SUPABASE_URL;
-const anonKey = process.env.SUPABASE_ANON_KEY;
+const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const key =
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY;
 
-if (!url || !anonKey) {
-  console.error('Missing SUPABASE_URL or SUPABASE_ANON_KEY env vars.');
+if (!url || !key) {
+  console.error('Missing Supabase URL or publishable/anon key env vars.');
   process.exit(1);
 }
 
-const supabase = createClient(url, anonKey, {
+const supabase = createClient(url, key, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 

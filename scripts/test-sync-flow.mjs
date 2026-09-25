@@ -1,9 +1,7 @@
 // Integration test — drives the app's REAL store + sync modules in Node,
 // the same code the browser runs, against the live Supabase project.
 //
-//   $env:VITE_SUPABASE_URL="https://xxxx.supabase.co"
-//   $env:VITE_SUPABASE_ANON_KEY="your_anon_key"
-//   node scripts/test-sync-flow.mjs
+//   node scripts/test-sync-flow.mjs   (loads .env automatically)
 //
 // Flow: log in (Supabase) -> place an order (local-first) -> flush the
 // queue -> verify rows landed in Postgres -> pull remote -> verify merge.

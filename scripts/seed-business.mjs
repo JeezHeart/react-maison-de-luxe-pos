@@ -1,17 +1,21 @@
 // Seeds the remaining business data (customers, settings, orders + items)
-// into Supabase using the service_role key. Idempotent — safe to re-run.
+// into Supabase using an admin credential. Idempotent — safe to re-run.
 //
 //   $env:SUPABASE_URL="https://xxxx.supabase.co"
-//   $env:SUPABASE_SERVICE_ROLE_KEY="your_service_role_key"
+//   $env:SUPABASE_SECRET_KEY="sb_secret_..."        (new key style)
+//   # or the legacy form: $env:SUPABASE_SERVICE_ROLE_KEY="eyJ...service_role..."
 //   node scripts/seed-business.mjs
 
 import { createClient } from '@supabase/supabase-js';
 
 const url = process.env.SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const serviceKey =
+  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !serviceKey) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars.');
+  console.error(
+    'Missing SUPABASE_URL or SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY) env vars.'
+  );
   process.exit(1);
 }
 
