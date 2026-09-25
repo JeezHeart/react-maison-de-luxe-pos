@@ -84,6 +84,7 @@ export const useMenuStore = create((set, get) => ({
   },
 
   updateItem: (id, data) => {
+    const target = get().items.find((m) => m.id === id);
     const items = get().items.map((m) => {
       if (m.id !== id) {
         return m;
@@ -101,6 +102,12 @@ export const useMenuStore = create((set, get) => ({
     persistMenu(get());
     const updated = items.find((m) => m.id === id);
     if (updated) {
+      // Renames are inserts of a new name under upsert-by-name — drop the
+      // old row too or it would linger in the cloud forever (and come back
+      // on the next pull as a duplicate). Delete first, then upsert.
+      if (target && updated.name !== target.name) {
+        enqueue({ table: 'menu', action: 'delete', name: target.name });
+      }
       enqueue({ table: 'menu', action: 'upsert', payload: updated });
     }
   },

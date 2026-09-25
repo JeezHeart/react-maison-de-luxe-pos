@@ -11,6 +11,7 @@
     "seed:business": "node scripts/seed-business.mjs",
     "seed:auth": "node scripts/seed-auth.mjs",
     "restore:menu": "node --env-file=.env scripts/restore-menu.mjs --apply",
+    "repair:menu-seq": "node --env-file=.env scripts/repair-menu-sequence.mjs",
     "test:sync": "node --env-file=.env scripts/test-sync-flow.mjs",
     "test:smoke": "node --env-file=.env scripts/smoke-test.mjs"
   },

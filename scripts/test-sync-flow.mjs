@@ -176,7 +176,9 @@ check(
   useCustomerStore.getState().customers.some((c) => c.name === 'Sync Test Patron'),
   `${useCustomerStore.getState().customers.length} customers`
 );
-useCustomerStore.getState().deleteCustomer(createdCustomer.id);
+useCustomerStore.getState().deleteCustomer(
+  useCustomerStore.getState().customers.find((c) => c.name === 'Sync Test Patron').id
+);
 await flushQueue();
 const { data: goneCust, error: goneCustErr } = await supabase
   .from('customers')
@@ -188,6 +190,79 @@ check(
   !goneCustErr && !goneCust,
   goneCust ? 'still present' : goneCustErr?.message || 'gone'
 );
+
+// 7c) Rename lifecycle — the old name must be dropped, not orphaned.
+const tofu = useMenuStore.getState().items.find((m) => m.name === 'Tofu Scramble');
+useMenuStore.getState().updateItem(tofu.id, { name: 'Tofu Scramble Test' });
+await flushQueue();
+const { data: renamedMenu } = await supabase
+  .from('menu_items')
+  .select('name, stock')
+  .eq('name', 'Tofu Scramble Test')
+  .single();
+const { data: oldMenuRow } = await supabase
+  .from('menu_items')
+  .select('id')
+  .eq('name', 'Tofu Scramble')
+  .maybeSingle();
+check(
+  'menu rename keeps new row, drops old',
+  !!renamedMenu && !oldMenuRow,
+  renamedMenu ? `stock=${renamedMenu.stock}` : 'missing'
+);
+useMenuStore.getState().updateItem(tofu.id, { name: 'Tofu Scramble' });
+await flushQueue();
+const { data: backToTofu } = await supabase
+  .from('menu_items')
+  .select('name, stock')
+  .eq('name', 'Tofu Scramble')
+  .single();
+const { data: orphanRow } = await supabase
+  .from('menu_items')
+  .select('id')
+  .eq('name', 'Tofu Scramble Test')
+  .maybeSingle();
+check(
+  'rename back restores original, no orphan',
+  !!backToTofu && !orphanRow && Number(backToTofu.stock) === 11,
+  backToTofu ? `stock=${backToTofu.stock}` : 'missing'
+);
+
+useCustomerStore.getState().addCustomer({
+  name: 'Rename Test Guest',
+  visits: 2,
+  total_spent: 0,
+  tier: 'Bronze',
+});
+await flushQueue();
+const customerForRename = useCustomerStore
+  .getState()
+  .customers.find((c) => c.name === 'Rename Test Guest');
+useCustomerStore.getState().updateCustomer(customerForRename.id, { name: 'Rename Test Valued' });
+await flushQueue();
+const { data: renamedCust } = await supabase
+  .from('customers')
+  .select('name')
+  .eq('name', 'Rename Test Valued')
+  .single();
+const { data: oldCustRow } = await supabase
+  .from('customers')
+  .select('id')
+  .eq('name', 'Rename Test Guest')
+  .maybeSingle();
+check(
+  'customer rename keeps new, drops old',
+  !!renamedCust && !oldCustRow,
+  renamedCust ? `name=${renamedCust.name}` : 'missing'
+);
+useCustomerStore.getState().deleteCustomer(customerForRename.id);
+await flushQueue();
+const { data: goneRenameCust } = await supabase
+  .from('customers')
+  .select('id')
+  .eq('name', 'Rename Test Valued')
+  .maybeSingle();
+check('renamed customer cleanup', !goneRenameCust);
 
 // 8) Clean up: restore the test order's stock so the DB is left clean.
 const avo = useMenuStore.getState().items.find((m) => m.name === 'Avocado Toast');

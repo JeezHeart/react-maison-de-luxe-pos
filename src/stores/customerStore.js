@@ -74,6 +74,7 @@ export const useCustomerStore = create((set, get) => ({
   },
 
   updateCustomer: (id, data) => {
+    const target = get().customers.find((c) => c.id === id);
     const next = get().customers.map((c) => {
       if (c.id !== id) {
         return c;
@@ -92,6 +93,11 @@ export const useCustomerStore = create((set, get) => ({
     persistCustomers(next);
     const updated = next.find((c) => c.id === id);
     if (updated) {
+      // Renames are inserts under upsert-by-name — drop the old row too,
+      // same as the menu store, or the ghost row survives in the cloud.
+      if (target && updated.name !== target.name) {
+        enqueue({ table: 'customers', action: 'delete', name: target.name });
+      }
       enqueue({ table: 'customers', action: 'upsert', payload: updated });
     }
   },
