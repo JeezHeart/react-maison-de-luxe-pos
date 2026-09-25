@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useCartStore } from '../stores/cartStore.js';
 import { useOrderStore } from '../stores/orderStore.js';
+import { useCustomerStore } from '../stores/customerStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { formatPeso, round2 } from '../utils/format.js';
 
@@ -23,6 +24,8 @@ export default function InvoicePanel() {
 
   const orders = useOrderStore((s) => s.orders);
   const placeOrder = useOrderStore((s) => s.placeOrder);
+
+  const customers = useCustomerStore((s) => s.customers);
 
   const showToast = useUIStore((s) => s.showToast);
   const mobileInvoiceVisible = useUIStore((s) => s.mobileInvoiceVisible);
@@ -199,14 +202,23 @@ export default function InvoicePanel() {
 
         <form id="orderForm" className="mt-3" onSubmit={handlePlaceOrder}>
           <div className="mb-2">
-            <label className="field-label">Customer Name</label>
+            <label className="field-label" htmlFor="customerNameInput">
+              Customer Name
+            </label>
             <input
+              id="customerNameInput"
               type="text"
               name="customer_name"
               className="field-control"
+              list="customer-name-list"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
             />
+            <datalist id="customer-name-list">
+              {customers.map((c) => (
+                <option key={c.id} value={c.name} />
+              ))}
+            </datalist>
           </div>
 
           <div className="mb-3">

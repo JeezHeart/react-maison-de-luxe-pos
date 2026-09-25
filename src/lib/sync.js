@@ -14,6 +14,9 @@
 //   menu:
 //     { table:'menu', action:'upsert', payload: fullItem }  // unique by name
 //     { table:'menu', action:'delete', name }
+//   customers:
+//     { table:'customers', action:'upsert', payload: fullCustomer }  // unique by name
+//     { table:'customers', action:'delete', name }
 //   settings:
 //     { table:'settings', action:'upsert', payload: { key, value } }
 
@@ -171,9 +174,31 @@ async function dispatchSettings(op) {
   if (error) throw error;
 }
 
+async function dispatchCustomers(op) {
+  if (op.action === 'delete') {
+    const { error } = await supabase.from('customers').delete().eq('name', op.name);
+    if (error) throw error;
+    return;
+  }
+  const row = op.payload || {};
+  const { error } = await supabase.from('customers').upsert(
+    {
+      name: row.name,
+      phone: row.phone || '',
+      email: row.email || '',
+      visits: Number(row.visits) || 0,
+      total_spent: round2(Number(row.total_spent) || 0),
+      tier: row.tier || 'Bronze',
+    },
+    { onConflict: 'name' }
+  );
+  if (error) throw error;
+}
+
 const DISPATCHERS = {
   orders: dispatchOrder,
   menu: dispatchMenu,
+  customers: dispatchCustomers,
   settings: dispatchSettings,
 };
 

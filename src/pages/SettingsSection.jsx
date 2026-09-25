@@ -6,16 +6,20 @@ import {
   X,
   Search,
   Trash2,
+  Users,
 } from 'lucide-react';
 import { useSettingsStore } from '../stores/settingsStore.js';
 import { useOrderStore, USER_COUNT } from '../stores/orderStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useMenuStore } from '../stores/menuStore.js';
+import { useCustomerStore } from '../stores/customerStore.js';
 import { useAuthStore } from '../stores/authStore.js';
+import { CUSTOMER_TIERS } from '../data/customers.js';
 import { getMenuImagePath } from '../utils/menu.js';
 import { formatPeso } from '../utils/format.js';
 
 const EMPTY_EDITOR = { name: '', category: '', description: '', price: '', stock: '' };
+const EMPTY_CUSTOMER = { name: '', phone: '', email: '', visits: '0', total_spent: '0', tier: 'Bronze' };
 
 // Settings section — restaurant profile (browser storage), system
 // snapshot, and (manager-only) menu management for items/categories.
@@ -36,6 +40,11 @@ export default function SettingsSection() {
   const deleteCategory = useMenuStore((s) => s.deleteCategory);
   const resetMenu = useMenuStore((s) => s.reset);
 
+  const customers = useCustomerStore((s) => s.customers);
+  const addCustomer = useCustomerStore((s) => s.addCustomer);
+  const updateCustomer = useCustomerStore((s) => s.updateCustomer);
+  const deleteCustomer = useCustomerStore((s) => s.deleteCustomer);
+
   const currentUser = useAuthStore((s) => s.currentUser);
   const isManager = currentUser && currentUser.role === 'manager';
 
@@ -50,6 +59,11 @@ export default function SettingsSection() {
   const [catRenameValue, setCatRenameValue] = useState('');
   const [editor, setEditor] = useState(null); // { mode: 'create' | 'edit', item: {...} }
   const [editorError, setEditorError] = useState('');
+
+  // Customer management state.
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerEditor, setCustomerEditor] = useState(null); // { mode, customer }
+  const [customerEditorError, setCustomerEditorError] = useState('');
 
   const handleSave = () => {
     saveSettings({ restaurantName, contact, address });
@@ -159,6 +173,86 @@ export default function SettingsSection() {
     }
   };
 
+  // ---- customer editor ----
+  const openCustomerCreate = () => {
+    setCustomerEditor({ mode: 'create', customer: { ...EMPTY_CUSTOMER } });
+    setCustomerEditorError('');
+  };
+
+  const openCustomerEdit = (customer) => {
+    setCustomerEditor({
+      mode: 'edit',
+      customer: {
+        ...customer,
+        visits: String(customer.visits),
+        total_spent: String(customer.total_spent),
+      },
+    });
+    setCustomerEditorError('');
+  };
+
+  const handleSaveCustomer = (e) => {
+    e.preventDefault();
+    const data = customerEditor.customer;
+    const name = String(data.name || '').trim();
+    if (!name) {
+      setCustomerEditorError('Customer name is required.');
+      return;
+    }
+    if (!CUSTOMER_TIERS.includes(data.tier)) {
+      setCustomerEditorError('Pick a valid tier.');
+      return;
+    }
+    const editingId = customerEditor.mode === 'edit' ? customerEditor.customer.id : null;
+    const duplicate = customers.some(
+      (c) => c.id !== editingId && c.name.toLowerCase() === name.toLowerCase()
+    );
+    if (duplicate) {
+      setCustomerEditorError('A customer with that name already exists.');
+      return;
+    }
+    const payload = {
+      name,
+      phone: data.phone,
+      email: data.email,
+      visits: Number(data.visits) || 0,
+      total_spent: Number(data.total_spent) || 0,
+      tier: data.tier,
+    };
+    if (customerEditor.mode === 'create') {
+      const created = addCustomer(payload);
+      if (created) {
+        showToast(`"${created.name}" added to the customer directory.`);
+        setCustomerEditor(null);
+      } else {
+        setCustomerEditorError('A customer with that name already exists.');
+      }
+    } else {
+      updateCustomer(editingId, payload);
+      showToast('Customer updated.');
+      setCustomerEditor(null);
+    }
+  };
+
+  const handleDeleteCustomer = (customer) => {
+    if (window.confirm(`Delete "${customer.name}" from the customer directory? This cannot be undone.`)) {
+      deleteCustomer(customer.id);
+      showToast(`"${customer.name}" removed from the directory.`);
+    }
+  };
+
+  const filteredCustomers = customers.filter((c) => {
+    const kw = customerSearch.trim().toLowerCase();
+    if (kw === '') {
+      return true;
+    }
+    return (
+      c.name.toLowerCase().includes(kw) ||
+      (c.phone || '').toLowerCase().includes(kw) ||
+      (c.email || '').toLowerCase().includes(kw)
+    );
+  });
+
   const filteredMenuItems = menuItems.filter((m) => {
     const kw = menuSearch.trim().toLowerCase();
     return kw === '' || m.name.toLowerCase().includes(kw) || m.category.toLowerCase().includes(kw);
@@ -252,6 +346,10 @@ export default function SettingsSection() {
             <div className="text-sm flex justify-between mb-1">
               <span className="text-muted">Menu Items</span>
               <strong>{menuItems.length}</strong>
+            </div>
+            <div className="text-sm flex justify-between mb-1">
+              <span className="text-muted">Customers</span>
+              <strong>{customers.length}</strong>
             </div>
             <div className="text-sm flex justify-between">
               <span className="text-muted">Orders</span>
@@ -448,6 +546,108 @@ export default function SettingsSection() {
         )}
       </div>
 
+      {/* Manager-only customer management */}
+      <div className="settings-box mt-3">
+        {isManager ? (
+          <>
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+              <h6 className="mb-0 flex items-center gap-1">
+                <Users size={16} aria-hidden="true" /> Customer Directory
+              </h6>
+              <button
+                type="button"
+                className="btn-primary-pos btn-sm-pos"
+                onClick={openCustomerCreate}
+              >
+                <Plus size={14} aria-hidden="true" /> New Customer
+              </button>
+            </div>
+            <p className="text-muted text-sm mb-3">
+              Add, edit, or remove customers. The directory is saved in the browser, syncs to the
+              cloud, and autocompletes names on the checkout screen.
+            </p>
+
+            <div className="search-wrap mb-3">
+              <Search size={15} className="search-icon" aria-hidden="true" />
+              <input
+                type="text"
+                className="search-input w-full"
+                placeholder="Search customers…"
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+              />
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="table-pos menu-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Tier</th>
+                    <th>Visits</th>
+                    <th>Total Spent</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCustomers.length > 0 ? (
+                    filteredCustomers.map((customer) => (
+                      <tr key={customer.id}>
+                        <td>
+                          <div>
+                            <span>{customer.name}</span>
+                            {customer.email ? (
+                              <div className="text-muted text-sm">{customer.email}</div>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td>{customer.phone || '—'}</td>
+                        <td>{customer.tier}</td>
+                        <td>{customer.visits}</td>
+                        <td>{formatPeso(customer.total_spent)}</td>
+                        <td>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="btn-outline-primary-pos btn-sm-pos"
+                              onClick={() => openCustomerEdit(customer)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-outline-danger-pos btn-sm-pos"
+                              onClick={() => handleDeleteCustomer(customer)}
+                            >
+                              <Trash2 size={13} aria-hidden="true" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="text-center text-muted py-3">
+                        No customers match your search.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <>
+            <h6 className="mb-2">Customer Directory</h6>
+            <p className="text-muted text-sm m-0">
+              Only managers can add, edit, or delete customers. Ask a manager to sign in to make
+              changes.
+            </p>
+          </>
+        )}
+      </div>
+
       {/* Menu item editor modal */}
       {editor ? (
         <div className="modal-overlay" onClick={() => setEditor(null)}>
@@ -567,6 +767,169 @@ export default function SettingsSection() {
                 </button>
                 <button type="submit" className="btn-primary-pos btn-sm-pos">
                   {editor.mode === 'create' ? 'Add Item' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Customer editor modal */}
+      {customerEditor ? (
+        <div className="modal-overlay" onClick={() => setCustomerEditor(null)}>
+          <div
+            className="product-modal-content menu-editor-modal p-3 md:p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Customer editor"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h6 className="m-0">
+                {customerEditor.mode === 'create' ? 'Add Customer' : 'Edit Customer'}
+              </h6>
+              <button
+                type="button"
+                className="modal-close-btn"
+                aria-label="Close"
+                onClick={() => setCustomerEditor(null)}
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveCustomer}>
+              <div className="mb-2">
+                <label className="field-label" htmlFor="customerName">
+                  Name
+                </label>
+                <input
+                  id="customerName"
+                  type="text"
+                  className="field-control"
+                  value={customerEditor.customer.name}
+                  onChange={(e) =>
+                    setCustomerEditor({
+                      ...customerEditor,
+                      customer: { ...customerEditor.customer, name: e.target.value },
+                    })
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <label className="field-label" htmlFor="customerPhone">
+                    Phone
+                  </label>
+                  <input
+                    id="customerPhone"
+                    type="text"
+                    className="field-control"
+                    placeholder="+63 912 345 6789"
+                    value={customerEditor.customer.phone}
+                    onChange={(e) =>
+                      setCustomerEditor({
+                        ...customerEditor,
+                        customer: { ...customerEditor.customer, phone: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="customerTier">
+                    Tier
+                  </label>
+                  <select
+                    id="customerTier"
+                    className="field-control"
+                    value={customerEditor.customer.tier}
+                    onChange={(e) =>
+                      setCustomerEditor({
+                        ...customerEditor,
+                        customer: { ...customerEditor.customer, tier: e.target.value },
+                      })
+                    }
+                  >
+                    {CUSTOMER_TIERS.map((tier) => (
+                      <option key={tier} value={tier}>
+                        {tier}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mb-2">
+                <label className="field-label" htmlFor="customerEmail">
+                  Email
+                </label>
+                <input
+                  id="customerEmail"
+                  type="email"
+                  className="field-control"
+                  placeholder="customer@example.com"
+                  value={customerEditor.customer.email}
+                  onChange={(e) =>
+                    setCustomerEditor({
+                      ...customerEditor,
+                      customer: { ...customerEditor.customer, email: e.target.value },
+                    })
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <label className="field-label" htmlFor="customerVisits">
+                    Visits
+                  </label>
+                  <input
+                    id="customerVisits"
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    step="1"
+                    className="field-control"
+                    value={customerEditor.customer.visits}
+                    onChange={(e) =>
+                      setCustomerEditor({
+                        ...customerEditor,
+                        customer: { ...customerEditor.customer, visits: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="customerTotalSpent">
+                    Total Spent (₱)
+                  </label>
+                  <input
+                    id="customerTotalSpent"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    className="field-control"
+                    value={customerEditor.customer.total_spent}
+                    onChange={(e) =>
+                      setCustomerEditor({
+                        ...customerEditor,
+                        customer: { ...customerEditor.customer, total_spent: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              {customerEditorError ? (
+                <p className="form-error text-sm mb-2">{customerEditorError}</p>
+              ) : null}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn-outline-secondary-pos btn-sm-pos"
+                  onClick={() => setCustomerEditor(null)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary-pos btn-sm-pos">
+                  {customerEditor.mode === 'create' ? 'Add Customer' : 'Save Changes'}
                 </button>
               </div>
             </form>

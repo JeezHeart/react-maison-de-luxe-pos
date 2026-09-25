@@ -31,6 +31,7 @@ if (!isSupabaseConfigured) {
 const { useAuthStore } = await import('../src/stores/authStore.js');
 const { useOrderStore } = await import('../src/stores/orderStore.js');
 const { useMenuStore } = await import('../src/stores/menuStore.js');
+const { useCustomerStore } = await import('../src/stores/customerStore.js');
 const { useSettingsStore } = await import('../src/stores/settingsStore.js');
 const { flushQueue, readQueue } = await import('../src/lib/sync.js');
 
@@ -140,7 +141,68 @@ check(
   useSettingsStore.getState().restaurantName
 );
 
-// 8) Logout clears the local session.
+// 7b) Customer CRUD through the store -> queue -> Postgres.
+const createdCustomer = useCustomerStore.getState().addCustomer({
+  name: 'Sync Test Patron',
+  phone: '0917 000 0000',
+  email: 'patron@test.local',
+  visits: 1,
+  total_spent: 100,
+  tier: 'Bronze',
+});
+check('customerStore addCustomer (local-first)', !!createdCustomer, `id=${createdCustomer?.id}`);
+await flushQueue();
+const { data: dbCust } = await supabase
+  .from('customers')
+  .select('*')
+  .eq('name', 'Sync Test Patron')
+  .single();
+check('customer upsert reaches Postgres', !!dbCust && dbCust.tier === 'Bronze', dbCust ? `id=${dbCust.id}` : 'missing');
+useCustomerStore.getState().updateCustomer(createdCustomer.id, { tier: 'Silver', total_spent: 250 });
+await flushQueue();
+const { data: dbCust2 } = await supabase
+  .from('customers')
+  .select('tier, total_spent')
+  .eq('name', 'Sync Test Patron')
+  .single();
+check(
+  'customer update reaches Postgres',
+  dbCust2?.tier === 'Silver' && Number(dbCust2.total_spent) === 250,
+  dbCust2 ? `tier=${dbCust2.tier} spent=${dbCust2.total_spent}` : 'missing'
+);
+await useCustomerStore.getState().syncFromRemote();
+check(
+  'customer syncFromRemote pulls directory',
+  useCustomerStore.getState().customers.some((c) => c.name === 'Sync Test Patron'),
+  `${useCustomerStore.getState().customers.length} customers`
+);
+useCustomerStore.getState().deleteCustomer(createdCustomer.id);
+await flushQueue();
+const { data: goneCust, error: goneCustErr } = await supabase
+  .from('customers')
+  .select('id')
+  .eq('name', 'Sync Test Patron')
+  .maybeSingle();
+check(
+  'customer delete reaches Postgres',
+  !goneCustErr && !goneCust,
+  goneCust ? 'still present' : goneCustErr?.message || 'gone'
+);
+
+// 8) Clean up: restore the test order's stock so the DB is left clean.
+const avo = useMenuStore.getState().items.find((m) => m.name === 'Avocado Toast');
+if (avo) {
+  useMenuStore.getState().updateItem(avo.id, { stock: beforeStock });
+  await flushQueue();
+  const { data: restored } = await supabase
+    .from('menu_items')
+    .select('stock')
+    .eq('name', 'Avocado Toast')
+    .single();
+  check('menu stock restored (cleanup)', restored && Number(restored.stock) === Number(beforeStock), `stock=${restored?.stock}`);
+}
+
+// 9) Logout clears the local session.
 await useAuthStore.getState().logout();
 check('logout clears session', !useAuthStore.getState().currentUser);
 

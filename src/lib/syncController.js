@@ -12,6 +12,7 @@ import { flushQueue, enqueue, readQueue } from './sync.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useOrderStore } from '../stores/orderStore.js';
 import { useMenuStore } from '../stores/menuStore.js';
+import { useCustomerStore } from '../stores/customerStore.js';
 import { useSettingsStore } from '../stores/settingsStore.js';
 import { useAuthStore } from '../stores/authStore.js';
 
@@ -57,6 +58,17 @@ async function enqueueLocalOnlyDiffs() {
       enqueue({ table: 'settings', action: 'upsert', payload: row });
     }
   }
+
+  const localCustomers = useCustomerStore.getState().customers;
+  if (localCustomers.length) {
+    const { data: remoteCustomers } = await supabase.from('customers').select('name');
+    const remoteNames = new Set((remoteCustomers || []).map((c) => c.name));
+    for (const customer of localCustomers) {
+      if (!remoteNames.has(customer.name)) {
+        enqueue({ table: 'customers', action: 'upsert', payload: customer });
+      }
+    }
+  }
 }
 
 async function runSync(reason = 'tick') {
@@ -76,6 +88,7 @@ async function runSync(reason = 'tick') {
     await Promise.all([
       useOrderStore.getState().syncFromRemote(),
       useMenuStore.getState().syncFromRemote(),
+      useCustomerStore.getState().syncFromRemote(),
       useSettingsStore.getState().syncFromRemote(),
     ]);
 
