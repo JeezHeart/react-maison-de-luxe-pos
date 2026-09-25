@@ -35,6 +35,7 @@ export default function SettingsSection() {
   const addItem = useMenuStore((s) => s.addItem);
   const updateItem = useMenuStore((s) => s.updateItem);
   const deleteItem = useMenuStore((s) => s.deleteItem);
+  const restoreItem = useMenuStore((s) => s.restoreItem);
   const addCategory = useMenuStore((s) => s.addCategory);
   const renameCategory = useMenuStore((s) => s.renameCategory);
   const deleteCategory = useMenuStore((s) => s.deleteCategory);
@@ -44,6 +45,7 @@ export default function SettingsSection() {
   const addCustomer = useCustomerStore((s) => s.addCustomer);
   const updateCustomer = useCustomerStore((s) => s.updateCustomer);
   const deleteCustomer = useCustomerStore((s) => s.deleteCustomer);
+  const restoreCustomer = useCustomerStore((s) => s.restoreCustomer);
 
   const currentUser = useAuthStore((s) => s.currentUser);
   const isManager = currentUser && currentUser.role === 'manager';
@@ -130,9 +132,13 @@ export default function SettingsSection() {
   };
 
   const handleDeleteItem = (item) => {
-    if (window.confirm(`Delete "${item.name}" from the menu? This cannot be undone.`)) {
+    if (window.confirm(`Delete "${item.name}" from the menu? You can undo this right away.`)) {
       deleteItem(item.id);
-      showToast(`"${item.name}" removed from the menu.`);
+      // Short window to undo before the cloud delete sticks.
+      showToast(`"${item.name}" removed from the menu.`, 4000, {
+        label: 'Undo',
+        onClick: () => restoreItem(item),
+      });
     }
   };
 
@@ -235,9 +241,17 @@ export default function SettingsSection() {
   };
 
   const handleDeleteCustomer = (customer) => {
-    if (window.confirm(`Delete "${customer.name}" from the customer directory? This cannot be undone.`)) {
+    if (
+      window.confirm(
+        `Delete "${customer.name}" from the customer directory? You can undo this right away.`
+      )
+    ) {
       deleteCustomer(customer.id);
-      showToast(`"${customer.name}" removed from the directory.`);
+      // Short window to undo before the cloud delete sticks.
+      showToast(`"${customer.name}" removed from the directory.`, 4000, {
+        label: 'Undo',
+        onClick: () => restoreCustomer(customer),
+      });
     }
   };
 

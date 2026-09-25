@@ -31,6 +31,7 @@ if (!isSupabaseConfigured) {
 const { useAuthStore } = await import('../src/stores/authStore.js');
 const { useOrderStore } = await import('../src/stores/orderStore.js');
 const { useMenuStore } = await import('../src/stores/menuStore.js');
+const { useCartStore } = await import('../src/stores/cartStore.js');
 const { useCustomerStore } = await import('../src/stores/customerStore.js');
 const { useSettingsStore } = await import('../src/stores/settingsStore.js');
 const { flushQueue, readQueue } = await import('../src/lib/sync.js');
@@ -130,6 +131,50 @@ check(
   !goneErr && !gone,
   gone ? 'still present' : goneErr?.message || 'gone'
 );
+
+// Deleting the order must return the sold stock (no phantom inventory loss).
+const { data: stockAfterDelete } = await supabase
+  .from('menu_items')
+  .select('stock')
+  .eq('name', 'Avocado Toast')
+  .single();
+check(
+  'deleteOrder restores the sold stock',
+  stockAfterDelete && Number(stockAfterDelete.stock) === Number(beforeStock),
+  `stock=${stockAfterDelete?.stock}`
+);
+
+// 6b) Cart oversell guard — can't go past available stock.
+const avoId = useMenuStore.getState().items.find((m) => m.name === 'Avocado Toast').id;
+const avoStock = Number(useMenuStore.getState().items.find((m) => m.name === 'Avocado Toast').stock);
+let acceptedAll = true;
+for (let i = 0; i < avoStock; i += 1) {
+  acceptedAll = useCartStore.getState().addToCart(avoId, 'Avocado Toast', 460) && acceptedAll;
+}
+check(
+  'cart accepts quantity up to stock',
+  acceptedAll && useCartStore.getState().items[0].qty === avoStock,
+  `qty=${useCartStore.getState().items[0]?.qty}`
+);
+const blockedAdd = useCartStore.getState().addToCart(avoId, 'Avocado Toast', 460);
+check(
+  'cart blocks quantity over stock',
+  blockedAdd === false && useCartStore.getState().items[0].qty === avoStock,
+  blockedAdd ? 'allowed past stock' : 'blocked'
+);
+useCartStore.getState().changeQty(avoId, 1);
+check(
+  'cart + button respects the stock cap',
+  useCartStore.getState().items[0].qty === avoStock,
+  `qty=${useCartStore.getState().items[0]?.qty}`
+);
+useCartStore.getState().changeQty(avoId, -5);
+check(
+  'cart - button reduces freely',
+  useCartStore.getState().items[0].qty === avoStock - 5,
+  `qty=${useCartStore.getState().items[0]?.qty}`
+);
+useCartStore.getState().clear();
 
 // 7) Menu + settings pull work as authenticated user.
 await useMenuStore.getState().syncFromRemote();
@@ -264,18 +309,99 @@ const { data: goneRenameCust } = await supabase
   .maybeSingle();
 check('renamed customer cleanup', !goneRenameCust);
 
-// 8) Clean up: restore the test order's stock so the DB is left clean.
-const avo = useMenuStore.getState().items.find((m) => m.name === 'Avocado Toast');
-if (avo) {
-  useMenuStore.getState().updateItem(avo.id, { stock: beforeStock });
-  await flushQueue();
-  const { data: restored } = await supabase
-    .from('menu_items')
-    .select('stock')
-    .eq('name', 'Avocado Toast')
-    .single();
-  check('menu stock restored (cleanup)', restored && Number(restored.stock) === Number(beforeStock), `stock=${restored?.stock}`);
-}
+// 8) Undo round-trips: menu delete -> restore -> hard delete, all cloud-synced.
+const dish = useMenuStore.getState().addItem({
+  name: 'Restore Test Dish',
+  category: 'Breakfast',
+  description: '',
+  price: 120,
+  stock: 5,
+});
+check('restore: menu item created (local)', !!dish);
+await flushQueue();
+const { data: dishInCloud } = await supabase
+  .from('menu_items')
+  .select('id')
+  .eq('name', 'Restore Test Dish')
+  .maybeSingle();
+check('restore: menu item reached cloud', !!dishInCloud);
+
+useMenuStore.getState().deleteItem(dish.id);
+await flushQueue();
+const { data: dishGone } = await supabase
+  .from('menu_items')
+  .select('id')
+  .eq('name', 'Restore Test Dish')
+  .maybeSingle();
+check('restore: menu delete removed cloud row', !dishGone);
+
+useMenuStore.getState().restoreItem(dish);
+await flushQueue();
+const { data: dishBack } = await supabase
+  .from('menu_items')
+  .select('name, stock')
+  .eq('name', 'Restore Test Dish')
+  .single();
+check(
+  'restore: menu undo brings row back',
+  dishBack && Number(dishBack.stock) === 5,
+  dishBack ? `stock=${dishBack.stock}` : 'missing'
+);
+
+useMenuStore.getState().deleteItem(dish.id);
+await flushQueue();
+const { data: dishGoneFinal } = await supabase
+  .from('menu_items')
+  .select('id')
+  .eq('name', 'Restore Test Dish')
+  .maybeSingle();
+check('restore: menu row hard-deleted cleanly', !dishGoneFinal);
+
+// Same round-trip for the customer directory.
+const guest = useCustomerStore.getState().addCustomer({
+  name: 'Restore Test Guest',
+  visits: 0,
+  total_spent: 0,
+  tier: 'Bronze',
+});
+useCustomerStore.getState().deleteCustomer(guest.id);
+await flushQueue();
+const { data: guestGone } = await supabase
+  .from('customers')
+  .select('id')
+  .eq('name', 'Restore Test Guest')
+  .maybeSingle();
+check('restore: customer delete reached cloud', !guestGone);
+
+useCustomerStore.getState().restoreCustomer(guest);
+await flushQueue();
+const { data: guestBack } = await supabase
+  .from('customers')
+  .select('id')
+  .eq('name', 'Restore Test Guest')
+  .single();
+check('restore: customer undo brings row back', !!guestBack);
+
+useCustomerStore.getState().deleteCustomer(guest.id);
+await flushQueue();
+const { data: guestFinal } = await supabase
+  .from('customers')
+  .select('id')
+  .eq('name', 'Restore Test Guest')
+  .maybeSingle();
+check('restore: customer row hard-deleted cleanly', !guestFinal);
+
+// Final proof the whole run left the inventory at its baseline.
+const { data: avoFinal } = await supabase
+  .from('menu_items')
+  .select('stock')
+  .eq('name', 'Avocado Toast')
+  .single();
+check(
+  'stock back to baseline (no residue)',
+  avoFinal && Number(avoFinal.stock) === Number(beforeStock),
+  `stock=${avoFinal?.stock}`
+);
 
 // 9) Logout clears the local session.
 await useAuthStore.getState().logout();

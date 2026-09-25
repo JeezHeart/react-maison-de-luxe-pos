@@ -139,7 +139,7 @@ npm run seed:auth       # demo staff accounts (cashier@ / manager@maison.de.luxe
 | `npm run preview` | Serve the production bundle locally |
 | `npm run seed:business` | Idempotently seed customers/settings/orders (needs `SUPABASE_SECRET_KEY`) |
 | `npm run seed:auth` | Create demo staff auth accounts + profiles (needs `SUPABASE_SECRET_KEY`) |
-| `npm run test:sync` | Full offline-first sync integration test against the live DB (17 checks) |
+| `npm run test:sync` | Full offline-first sync integration test against the live DB (40 checks) |
 | `npm run test:smoke` | Smoke test of the exact API path the browser uses (reads/writes) |
 
 `test:sync` and `test:smoke` load `.env` automatically and clean up after
@@ -193,6 +193,12 @@ public bundle, so a secret key there would be exposed to the world.
   `protein = (stock % 18) + 12`, `fat = (stock % 14) + 8`.
 - **CSV export** — generated fully client-side with the same columns shown in
   the Orders table.
+- **Never sells what's not in stock** — the invoice cart caps quantity at the
+  item's remaining stock (across add-on variants), and the POS menu upsert
+  clamps to `stock >= 0`.
+- **Deletes are undoable** — deleting an order, menu item, or customer shows a
+  4-second **Undo** toast that re-inserts the record locally and re-syncs it
+  to the cloud. Deleting an order also returns the sold stock to inventory.
 
 ---
 

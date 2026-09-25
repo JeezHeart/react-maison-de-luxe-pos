@@ -112,6 +112,17 @@ export const useCustomerStore = create((set, get) => ({
     }
   },
 
+  // Re-insert a previously deleted customer (Undo delete).
+  restoreCustomer: (customer) => {
+    if (!customer || get().customers.some((c) => c.id === customer.id)) {
+      return;
+    }
+    const next = [...get().customers, customer];
+    set({ customers: next });
+    persistCustomers(next);
+    enqueue({ table: 'customers', action: 'upsert', payload: customer });
+  },
+
   reset: () => {
     const seed = cloneSeed();
     set({ customers: seed });

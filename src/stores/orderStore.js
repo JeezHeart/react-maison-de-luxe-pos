@@ -207,10 +207,18 @@ export const useOrderStore = create((set, get) => ({
   },
 
   deleteOrder: (id) => {
+    const target = get().orders.find((o) => o.id === id);
     const next = get().orders.filter((o) => o.id !== id);
     set({ orders: next });
     persist(next);
     enqueue({ table: 'orders', action: 'delete', id });
+    // Return the sold stock so a deleted sale can't silently drain the
+    // inventory. If the user hits Undo, restoreOrder re-deducts it.
+    if (target) {
+      for (const line of target.items || []) {
+        useMenuStore.getState().restoreStock(line.name, line.quantity);
+      }
+    }
   },
 
   // Move an order through the status pipeline (kanban board).
@@ -224,7 +232,8 @@ export const useOrderStore = create((set, get) => ({
   },
 
   // Re-insert a previously deleted order (Undo delete). Orders are kept
-  // sorted newest-first by id to match the display convention.
+  // sorted newest-first by id to match the display convention. Re-stocks
+  // are reversed so the inventory matches the restored sale.
   restoreOrder: (order) => {
     if (!order || get().orders.some((o) => o.id === order.id)) {
       return;
@@ -233,6 +242,9 @@ export const useOrderStore = create((set, get) => ({
     set({ orders: next });
     persist(next);
     enqueue({ table: 'orders', action: 'insert', payload: order });
+    for (const line of order.items || []) {
+      useMenuStore.getState().reduceStock(line.name, line.quantity);
+    }
   },
 
   getOrder: (id) => get().orders.find((o) => o.id === id),

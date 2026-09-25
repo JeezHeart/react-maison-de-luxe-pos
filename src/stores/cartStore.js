@@ -10,10 +10,20 @@ export const useCartStore = create((set, get) => ({
   items: [],
 
   addToCart: (itemId, itemName, itemPrice, addonText = '') => {
-    // Block adding items that are currently out of stock.
-    const menuLookup = useMenuStore.getState().items.find((m) => m.name === itemName);
-    if (menuLookup && Number(menuLookup.stock) <= 0) {
-      useUIStore.getState().showToast('Out of stock — cannot add to invoice.');
+    // Cap the cart at available stock (across add-on variants of the item).
+    const menuItems = useMenuStore.getState().items;
+    const menuLookup =
+      menuItems.find((m) => m.id === itemId) || menuItems.find((m) => m.name === itemName);
+    const stock = menuLookup ? Math.max(0, Number(menuLookup.stock) || 0) : Infinity;
+    const inCartQty = get().items
+      .filter((i) => i.id === itemId)
+      .reduce((sum, i) => sum + i.qty, 0);
+    if (inCartQty + 1 > stock) {
+      useUIStore.getState().showToast(
+        stock <= 0
+          ? 'Out of stock — cannot add to invoice.'
+          : `Only ${stock - inCartQty} left in stock — already on your invoice.`
+      );
       return false;
     }
     const keyAddonText = addonText || '';
@@ -30,6 +40,7 @@ export const useCartStore = create((set, get) => ({
 
     set({ items });
     useUIStore.getState().showToast('Item added to invoice.');
+    return true;
   },
 
   changeQty: (itemId, changeValue) => {
@@ -38,12 +49,32 @@ export const useCartStore = create((set, get) => ({
     if (index === -1) {
       return;
     }
-    const qty = items[index].qty + changeValue;
+    const current = items[index];
+    const qty = current.qty + changeValue;
     if (qty <= 0) {
       items = items.filter((_, i) => i !== index);
-    } else {
-      items[index] = { ...items[index], qty };
+      set({ items });
+      return;
     }
+    // Increasing beyond available stock is blocked; removing never is.
+    if (changeValue > 0) {
+      const menuItems = useMenuStore.getState().items;
+      const menuLookup = menuItems.find((m) => m.id === itemId);
+      if (menuLookup) {
+        const stock = Math.max(0, Number(menuLookup.stock) || 0);
+        const otherQty = items.reduce(
+          (sum, i) => sum + (i.id === itemId ? 0 : i.qty),
+          0
+        );
+        if (otherQty + qty > stock) {
+          useUIStore.getState().showToast(
+            `Only ${Math.max(0, stock - otherQty)} more in stock — already on your invoice.`
+          );
+          return;
+        }
+      }
+    }
+    items[index] = { ...items[index], qty };
     set({ items });
   },
 

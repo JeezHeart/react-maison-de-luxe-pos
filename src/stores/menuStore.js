@@ -122,6 +122,19 @@ export const useMenuStore = create((set, get) => ({
     }
   },
 
+  // Re-insert a previously deleted item (Undo delete). The queued upsert
+  // brings the row back in the cloud (re-inserted by name if the delete
+  // already flushed, or left untouched if the undo beat the flush).
+  restoreItem: (item) => {
+    if (!item || get().items.some((m) => m.id === item.id)) {
+      return;
+    }
+    const next = [...get().items, item];
+    set({ items: next });
+    persistMenu(get());
+    enqueue({ table: 'menu', action: 'upsert', payload: item });
+  },
+
   addCategory: (name) => {
     const cat = String(name || '').trim();
     if (!cat) {
@@ -193,6 +206,22 @@ export const useMenuStore = create((set, get) => ({
     const reduced = get().items.find((m) => m.name === String(name));
     if (reduced) {
       enqueue({ table: 'menu', action: 'upsert', payload: reduced });
+    }
+  },
+
+  // Re-stock the named item (used when a sale is undone/deleted). Missing
+  // items are skipped silently, matching reduceStock.
+  restoreStock: (name, qty = 1) => {
+    const amount = Math.max(1, Number(qty) || 1);
+    set({
+      items: get().items.map((m) =>
+        m.name === String(name) ? { ...m, stock: Number(m.stock) + amount } : m
+      ),
+    });
+    persistMenu(get());
+    const restored = get().items.find((m) => m.name === String(name));
+    if (restored) {
+      enqueue({ table: 'menu', action: 'upsert', payload: restored });
     }
   },
 
