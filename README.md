@@ -410,6 +410,7 @@ npm run seed:auth       # staff accounts (cashier@ / manager@maison.de.luxe)
 | `npm run test:unit` | Vitest unit tests — cart oversell guard, order-id generator, stock math, date parsing, date-range scoping |
 | `npm run test:sync` | Full offline-first sync integration test against the live DB (40 checks) |
 | `npm run test:smoke` | Smoke test of the exact API path the browser uses (reads/writes) |
+| `npm run check:live` | Post-deploy check of the live site: page up, assets served, RLS refusing anonymous reads, staff sign-in working |
 | `npm run restore:menu` | Restore the seeded menu from bundled data |
 | `npm run repair:menu-seq` | Repair the menu identity sequence drift |
 | `npm run assets:sizes` | List every image with its dimensions, file size and bytes-per-pixel |
@@ -432,6 +433,8 @@ The project ships with a three-layer verification battery:
 | **Smoke test** | Node script vs live Supabase | The exact API path the browser uses (auth, menu/orders/items/settings CRUD, cascade delete) | clean |
 
 Run them with `npm run test:unit`, `npm run test:sync`, `npm run test:smoke`.
+After deploying, `npm run check:live` verifies the live site end to end without
+changing any data.
 
 ---
 
