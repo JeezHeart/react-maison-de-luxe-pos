@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { LayoutDashboard } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 import { useOrderStore } from '../stores/orderStore.js';
+import { useUIStore } from '../stores/uiStore.js';
 import { useMenuStore, LOW_STOCK_THRESHOLD } from '../stores/menuStore.js';
 import { formatPeso, formatDateOnly, round2 } from '../utils/format.js';
 import { lastNDaysBounds, filterByBounds } from '../utils/dateRange.js';
@@ -20,6 +21,7 @@ export default function AdminPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const orders = useOrderStore((s) => s.orders);
   const menuItems = useMenuStore((s) => s.items);
+  const showToast = useUIStore((s) => s.showToast);
 
   const [salesRange, setSalesRange] = useState(14);
 
@@ -27,6 +29,16 @@ export default function AdminPage() {
   // range buttons govern the whole page instead of just the trend chart.
   const bounds = useMemo(() => lastNDaysBounds(salesRange), [salesRange]);
   const scoped = useMemo(() => filterByBounds(orders, bounds), [orders, bounds]);
+
+  // Export the same window the page is showing, never the full order list.
+  const handleExport = () => {
+    const count = exportOrdersCsv(scoped, { label: `last${salesRange}d` });
+    showToast(
+      count === 0
+        ? `No orders in the last ${salesRange} days — nothing exported.`
+        : `Exported ${count} order${count === 1 ? '' : 's'} from the last ${salesRange} days.`
+    );
+  };
 
   const stats = useMemo(() => {
     const today = formatDateOnly(new Date());
@@ -371,7 +383,8 @@ export default function AdminPage() {
                 <button
                   type="button"
                   className="btn-outline-secondary-pos btn-sm-pos"
-                  onClick={() => exportOrdersCsv(orders)}
+                  onClick={handleExport}
+                  title={`Export the orders from the last ${salesRange} days`}
                 >
                   Export CSV
                 </button>
