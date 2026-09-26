@@ -3,6 +3,7 @@ import { FileText } from 'lucide-react';
 import { useOrderStore } from '../stores/orderStore.js';
 import { useMenuStore } from '../stores/menuStore.js';
 import { formatPeso, formatDateOnly, round2 } from '../utils/format.js';
+import { rangeBounds, filterByBounds } from '../utils/dateRange.js';
 import { SalesTrendChart, PaymentDonut, TopItemsBar } from '../components/ReportCharts.jsx';
 
 const RANGES = [
@@ -11,27 +12,6 @@ const RANGES = [
   { value: 'week', label: 'This Week' },
   { value: 'month', label: 'This Month' },
 ];
-
-function rangeBounds(range) {
-  const today = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-
-  if (range === 'today') {
-    const s = formatDateOnly(today);
-    return { start: s, end: s };
-  }
-  if (range === 'week') {
-    const start = new Date(today.getTime() - 6 * 86400000);
-    return { start: formatDateOnly(start), end: formatDateOnly(today) };
-  }
-  if (range === 'month') {
-    return {
-      start: `${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`,
-      end: formatDateOnly(today),
-    };
-  }
-  return { start: '', end: '' };
-}
 
 // Build a contiguous trend for the selected range: hourly for Today,
 // daily for Week/Month, monthly for All Time.
@@ -103,14 +83,7 @@ export default function ReportsSection() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const stats = useMemo(() => {
-    const { start, end } = rangeBounds(reportRange);
-    const filtered =
-      start === ''
-        ? orders
-        : orders.filter((o) => {
-            const day = String(o.created_at || '').slice(0, 10);
-            return day >= start && day <= end;
-          });
+    const filtered = filterByBounds(orders, rangeBounds(reportRange));
 
     const totalOrders = filtered.length;
     const totalSales = filtered.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);

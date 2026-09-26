@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore.js';
 import { useOrderStore } from '../stores/orderStore.js';
 import { useMenuStore, LOW_STOCK_THRESHOLD } from '../stores/menuStore.js';
 import { formatPeso, formatDateOnly, round2 } from '../utils/format.js';
+import { lastNDaysBounds, filterByBounds } from '../utils/dateRange.js';
 import { getMenuImagePath } from '../utils/menu.js';
 import { exportOrdersCsv } from '../utils/csv.js';
 import { SalesTrendChart, PaymentDonut, TopItemsBar } from '../components/ReportCharts.jsx';
@@ -22,17 +23,24 @@ export default function AdminPage() {
 
   const [salesRange, setSalesRange] = useState(14);
 
+  // Every sales-derived number below is computed from this scoped set, so the
+  // range buttons govern the whole page instead of just the trend chart.
+  const bounds = useMemo(() => lastNDaysBounds(salesRange), [salesRange]);
+  const scoped = useMemo(() => filterByBounds(orders, bounds), [orders, bounds]);
+
   const stats = useMemo(() => {
     const today = formatDateOnly(new Date());
+    // Deliberately all-time: the "Today" cards are labelled as today, and
+    // today always falls inside the range window anyway.
     const todayOrders = orders.filter(
       (o) => String(o.created_at || '').slice(0, 10) === today
     );
-    const totalSales = orders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+    const totalSales = scoped.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
     const todaySales = todayOrders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
     // Top 5 selling menu items.
     const itemMap = new Map();
-    orders.forEach((o) => {
+    scoped.forEach((o) => {
       (o.items || []).forEach((it) => {
         const entry = itemMap.get(it.name) || { name: it.name, qty: 0, revenue: 0 };
         entry.qty += it.quantity;
@@ -44,7 +52,7 @@ export default function AdminPage() {
 
     // Payment method mix.
     const paymentMap = new Map();
-    orders.forEach((o) => {
+    scoped.forEach((o) => {
       const key = o.payment_method || 'Unknown';
       const entry = paymentMap.get(key) || { method: key, count: 0, total: 0 };
       entry.count += 1;
@@ -64,7 +72,7 @@ export default function AdminPage() {
       .slice(0, 8);
 
     // Cancelled orders = lost revenue.
-    const cancelledOrders = orders.filter(
+    const cancelledOrders = scoped.filter(
       (o) => String(o.order_status).toLowerCase() === 'cancelled'
     );
     const lostRevenue = cancelledOrders.reduce(
@@ -74,12 +82,12 @@ export default function AdminPage() {
 
     // Total amount given away as discounts.
     const discountTotal = round2(
-      orders.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0)
+      scoped.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0)
     );
 
     // Cashier leaderboard (by sales) from the recorded cashier name.
     const cashierMap = new Map();
-    orders.forEach((o) => {
+    scoped.forEach((o) => {
       const name = o.cashier_name || 'N/A';
       const entry = cashierMap.get(name) || { name, count: 0, sales: 0 };
       entry.count += 1;
@@ -102,7 +110,7 @@ export default function AdminPage() {
       });
     }
     const salesByDate = new Map();
-    orders.forEach((o) => {
+    scoped.forEach((o) => {
       const day = String(o.created_at || '').slice(0, 10);
       salesByDate.set(day, (salesByDate.get(day) || 0) + Number(o.total_amount || 0));
     });
@@ -112,11 +120,11 @@ export default function AdminPage() {
     const rangeSalesTotal = round2(dailySales.reduce((sum, row) => sum + row.total, 0));
 
     return {
-      totalOrders: orders.length,
+      totalOrders: scoped.length,
       todayOrders: todayOrders.length,
       totalSales,
       todaySales,
-      avgOrderValue: orders.length > 0 ? totalSales / orders.length : 0,
+      avgOrderValue: scoped.length > 0 ? totalSales / scoped.length : 0,
       menuItems: menuItems.length,
       lowStockItems,
       topItems,
@@ -129,7 +137,7 @@ export default function AdminPage() {
       dailySales,
       rangeSalesTotal,
     };
-  }, [orders, menuItems, salesRange]);
+  }, [orders, scoped, menuItems, salesRange]);
 
   return (
     <div id="adminOverview" className="main-section active-section">
@@ -137,7 +145,10 @@ export default function AdminPage() {
         <h4 className="section-title m-0 flex items-center gap-1">
           <LayoutDashboard size={26} aria-hidden="true" /> Admin Overview
         </h4>
-        <small className="text-muted">Business pulse for {currentUser?.name || 'the manager'}.</small>
+        <small className="text-muted">
+          Business pulse for {currentUser?.name || 'the manager'}. Sales figures
+          reflect the last {salesRange} days.
+        </small>
       </div>
 
       {/* Sales trend — headline chart first so it greets the manager */}
@@ -260,8 +271,9 @@ export default function AdminPage() {
         </div>
         <div className="stagger-card" style={{ animationDelay: '120ms' }}>
           <div className="report-card report-green">
-            <div className="text-muted text-sm">All-Time Sales</div>
+            <div className="text-muted text-sm">Sales · Last {salesRange}d</div>
             <div className="report-value">{formatPeso(stats.totalSales)}</div>
+            <div className="text-muted text-xs">{stats.totalOrders} orders</div>
           </div>
         </div>
         <div className="stagger-card" style={{ animationDelay: '180ms' }}>
