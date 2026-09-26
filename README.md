@@ -406,6 +406,7 @@ npm run seed:auth       # staff accounts (cashier@ / manager@maison.de.luxe)
 | `npm run test:smoke` | Smoke test of the exact API path the browser uses (reads/writes) |
 | `npm run restore:menu` | Restore the seeded menu from bundled data |
 | `npm run repair:menu-seq` | Repair the menu identity sequence drift |
+| `npm run assets:sizes` | List every image with its dimensions, file size and bytes-per-pixel |
 
 `test:sync` and `test:smoke` load `.env` automatically and clean up after
 themselves (restore menu stock, delete probe rows). Every script that signs in
@@ -475,7 +476,13 @@ public bundle, so a secret key there would be exposed to the world.
 - **Settings** — restaurant name/contact/address persist locally
   (`pos_restaurant_name`, `pos_restaurant_contact`, `pos_restaurant_address`).
 - **Images** — menu-name slugs map to real filenames in `public/assets/images/`
-  (including some double-extension files like `.jpg.jpg`).
+  (including some double-extension files like `.jpg.jpg`). Run
+  `npm run assets:sizes` to list every asset with its dimensions, weight and
+  bytes-per-pixel; it is how the two logos were found to be carrying roughly 8×
+  more pixels than any size the app actually renders them at.
+- **Logo assets are deliberately excluded from the service-worker precache.**
+  They use a runtime `CacheFirst` rule instead, so the app shell is not held up
+  by image weight on first visit.
 - **Nutrition** — computed from price and stock:
   `calories = price × 8.5`, `carbs = (stock % 20) + 15`,
   `protein = (stock % 18) + 12`, `fat = (stock % 14) + 8`.
