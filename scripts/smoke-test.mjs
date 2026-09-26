@@ -3,6 +3,7 @@
 //   node scripts/smoke-test.mjs   (loads .env automatically)
 
 import { createClient } from '@supabase/supabase-js';
+import { staffPassword } from './staff-password.mjs';
 
 const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const key =
@@ -29,7 +30,7 @@ const count = async (label, table) => {
 // 1. Sign in as the cashier (authenticated role).
 const { data: signIn, error: signInError } = await supabase.auth.signInWithPassword({
   email: 'cashier@maison.de.luxe',
-  password: '123456',
+  password: staffPassword('cashier'),
 });
 if (signInError || !signIn.user) {
   console.error(`SIGN IN failed: ${signInError?.message || 'no user'}`);

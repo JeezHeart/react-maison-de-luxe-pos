@@ -6,10 +6,17 @@
 //   # or the legacy form: $env:SUPABASE_SERVICE_ROLE_KEY="eyJ...service_role..."
 //   node scripts/seed-auth.mjs
 //
+// Staff passwords are read from the environment (see staff-password.mjs).
+// They used to be hardcoded here, which published the working manager login
+// in this repository — anyone who cloned it could sign in. The addresses and
+// roles below are not sensitive; the passwords never appear in source, in git
+// history, or in a build.
+//
 // Uses an admin credential (full access) — server-side only, never
 // committed, never used by the browser app.
 
 import { createClient } from '@supabase/supabase-js';
+import { staffPassword } from './staff-password.mjs';
 
 const url = process.env.SUPABASE_URL;
 const serviceKey =
@@ -32,23 +39,28 @@ const USERS = [
     // Supabase enforces a 6-character minimum password length.
     // (Matching the old demo login cashier/1234 would require lowering it
     // in Authentication -> Providers -> Email settings.)
-    password: '123456',
     role: 'cashier',
     name: 'Main Cashier',
   },
   {
     email: 'manager@maison.de.luxe',
-    password: 'admin123',
     role: 'manager',
     name: 'Store Manager',
   },
 ];
 
+// Resolve every password up front so a missing one fails before the database
+// is touched, rather than leaving one account created and one not.
+const PASSWORDS = {
+  cashier: staffPassword('cashier'),
+  manager: staffPassword('manager'),
+};
+
 for (const u of USERS) {
   // Create (or re-fetch) the auth user, email pre-confirmed.
   const { data: created, error } = await supabase.auth.admin.createUser({
     email: u.email,
-    password: u.password,
+    password: PASSWORDS[u.role],
     email_confirm: true,
     user_metadata: { role: u.role, name: u.name },
   });
@@ -71,4 +83,4 @@ for (const u of USERS) {
   }
 }
 
-console.log('\nDone. Logins: cashier@maison.de.luxe / 123456, manager@maison.de.luxe / admin123');
+console.log('\nDone. Sign in with the emails above using the passwords you supplied.');

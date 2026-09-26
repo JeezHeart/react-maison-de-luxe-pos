@@ -8,13 +8,20 @@ restaurant settings — and it keeps working even with **no internet connection*
 
 > **Live demo:** <https://maison-de-luxe-pos.vercel.app>
 >
-> **Sign in with the demo accounts below** (they are bundled into the app —
-> no sign-up needed).
+> Sign in with the staff accounts created for this deployment (`cashier` or
+> `manager` as the username). Their passwords are **not** in this repository —
+> they live in Supabase Auth, and only the project owner can set them.
 
-| Role | Username | Password | What you land on |
-|------|----------|----------|------------------|
-| **Cashier** | `cashier` | `123456` | The POS register (`/pos`) — menu, checkout, orders, reports, settings |
-| **Manager** | `manager` | `admin123` | The admin dashboard (`/admin`) — overview, orders, reports, settings **plus** menu & customer management |
+| Role | Username | What you land on |
+|------|----------|------------------|
+| **Cashier** | `cashier` | The POS register (`/pos`) — menu, checkout, orders, reports, settings |
+| **Manager** | `manager` | The admin dashboard (`/admin`) — overview, orders, reports, settings **plus** menu & customer management |
+
+> **No Supabase configured?** The app falls back to pure-local mode with two
+> bundled demo accounts, so you can click through it with no setup. Those
+> accounts are local-only — they do not work on a deployment that has Supabase
+> configured, and they are not listed here because the source is public. See
+> `ACCOUNTS` in `src/stores/authStore.js`.
 
 ---
 
@@ -126,6 +133,11 @@ Everything below is grouped by the screen you see in the app. Each entry states
 
 - **What it does:** username + password authentication (Supabase Auth when
   configured, with a built-in local fallback so the app never blocks logins).
+  The two usernames (`cashier`, `manager`) map to the Supabase Auth accounts;
+  the passwords live only in Supabase and in your local `.env`, never in this
+  repository. The demo-credential hint on this screen appears **only** in
+  pure-local mode — with Supabase configured it is hidden, so a deployment
+  never prints a working password to a visitor.
 - **What it's used for:** protecting the POS so only staff can place orders or
   change business data. It remembers your session, so refreshing the page keeps
   you signed in.
@@ -158,7 +170,7 @@ Everything below is grouped by the screen you see in the app. Each entry states
 | **Kanban board view** | Three columns — **Pending / Completed / Cancelled** — with order cards; **drag a card** between columns to change its status | Visually managing the kitchen/service pipeline |
 | **View (details card)** | Opens a sliding detail card with full order breakdown (sold items, prices, totals, cash/change, discount) | Inspecting a specific transaction |
 | **Receipt** | Opens the printable receipt in a new tab (`/receipt/:id`) | Handing a customer their receipt or printing |
-| **Export CSV** | Downloads all displayed orders as a `.csv` file (same columns as the table), generated entirely in the browser | Bookkeeping, Excel analysis, accountant hand-off |
+| **Export CSV** | Downloads the orders as a `.csv` file (same columns as the table), generated entirely in the browser. On the Orders page that is the full ledger; **on the manager overview it is only the range currently selected**, and the filename is tagged with it (e.g. `orders_export_2026-09-26_last14d.csv`) | Bookkeeping, Excel analysis, accountant hand-off — a file always says which period it covers |
 | **Delete order** | Removes the order *and automatically restores the sold stock* to inventory; shows a 4-second **Undo** toast | Correcting a mistaken/fake sale without losing inventory |
 | **Manager PIN gate** | Cashier deletes require the manager's PIN (valid 5 minutes) | Preventing a cashier from removing sale records on their own |
 
@@ -342,6 +354,11 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 
 - `VITE_SUPABASE_PUBLISHABLE_KEY` — **public**, safe in the browser bundle.
 - `VITE_SUPABASE_ANON_KEY` — legacy fallback, still accepted by `supabase.js`.
+- `POS_CASHIER_PASSWORD` / `POS_MANAGER_PASSWORD` — staff passwords, needed
+  **only** by the local scripts that sign in as a staff member (`test:smoke`,
+  `test:sync`, `seed:auth`, `seed:business`, `restore:menu`,
+  `repair:menu-seq`). Deliberately not `VITE_`-prefixed, so they can never be
+  bundled into the browser. Keep them in `.env`, which is gitignored.
 - ⛔ Never put a **Secret key** (`sb_secret_...`) or the legacy `service_role`
   JWT in `.env`/Vercel/browser code — they bypass Row Level Security.
 
@@ -359,9 +376,19 @@ to re-run.
 # (Legacy SUPABASE_SERVICE_ROLE_KEY still accepted for backwards compat.)
 $env:SUPABASE_URL="https://<project-ref>.supabase.co"
 $env:SUPABASE_SECRET_KEY="sb_secret_..."
+# Staff passwords — NOT the secret key. Whatever you set in Supabase Auth
+# for these two accounts, so the seeder can create them with it.
+$env:POS_CASHIER_PASSWORD="choose-a-unique-password"
+$env:POS_MANAGER_PASSWORD="choose-a-different-unique-password"
 npm run seed:business   # customers, settings, sample orders + items
-npm run seed:auth       # demo staff accounts (cashier@ / manager@maison.de.luxe)
+npm run seed:auth       # staff accounts (cashier@ / manager@maison.de.luxe)
 ```
+
+> Re-running `seed:auth` will not overwrite an existing account's password —
+> Supabase rejects creating a user whose email already exists. To change a
+> password after the fact, use the Supabase dashboard
+> (Authentication → Users), then update the matching `POS_*_PASSWORD` in your
+> local `.env` so the scripts keep working.
 
 ---
 
@@ -373,15 +400,17 @@ npm run seed:auth       # demo staff accounts (cashier@ / manager@maison.de.luxe
 | `npm run build` | Production bundle into `dist/` (+ PWA manifest & service worker) |
 | `npm run preview` | Serve the production bundle locally |
 | `npm run seed:business` | Idempotently seed customers/settings/orders (needs `SUPABASE_SECRET_KEY`) |
-| `npm run seed:auth` | Create demo staff auth accounts + profiles (needs `SUPABASE_SECRET_KEY`) |
-| `npm run test:unit` | Vitest unit tests — cart oversell guard, order-id generator, stock math, date parsing |
+| `npm run seed:auth` | Create staff auth accounts + profiles (needs `SUPABASE_SECRET_KEY` and both `POS_*_PASSWORD`) |
+| `npm run test:unit` | Vitest unit tests — cart oversell guard, order-id generator, stock math, date parsing, date-range scoping |
 | `npm run test:sync` | Full offline-first sync integration test against the live DB (40 checks) |
 | `npm run test:smoke` | Smoke test of the exact API path the browser uses (reads/writes) |
 | `npm run restore:menu` | Restore the seeded menu from bundled data |
 | `npm run repair:menu-seq` | Repair the menu identity sequence drift |
 
 `test:sync` and `test:smoke` load `.env` automatically and clean up after
-themselves (restore menu stock, delete probe rows).
+themselves (restore menu stock, delete probe rows). Every script that signs in
+as a staff member reads its password from `POS_CASHIER_PASSWORD` /
+`POS_MANAGER_PASSWORD` and exits with instructions if one is missing.
 
 ---
 
@@ -426,6 +455,13 @@ public bundle, so a secret key there would be exposed to the world.
 - **If a secret key leaks:** create a new Secret key in Supabase → Settings →
   API Keys, point every admin tool at it, then delete/disable the old key.
 - `.env` is gitignored — credentials are never committed.
+- **Staff passwords are not in this repository.** They live in Supabase Auth
+  and, for the local scripts, in `POS_CASHIER_PASSWORD` / `POS_MANAGER_PASSWORD`
+  in your gitignored `.env`. Nothing under `VITE_` is a password. The login
+  screen only shows the bundled demo credentials in pure-local mode, so a real
+  deployment never displays a working password.
+  ⚠️ Anyone who can reach the app can reach the login form — set unique
+  passwords, and change them if they were ever reused or published.
 
 ---
 

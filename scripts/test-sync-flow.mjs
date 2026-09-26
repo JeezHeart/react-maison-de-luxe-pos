@@ -6,6 +6,8 @@
 // Flow: log in (Supabase) -> place an order (local-first) -> flush the
 // queue -> verify rows landed in Postgres -> pull remote -> verify merge.
 
+import { staffPassword } from './staff-password.mjs';
+
 // --- localStorage polyfill (browser-only API) -------------------------------
 const store = new Map();
 globalThis.localStorage = {
@@ -39,7 +41,7 @@ const { flushQueue, readQueue } = await import('../src/lib/sync.js');
 // 1) Sign in as the cashier through the store (Supabase path).
 const loggedIn = await useAuthStore.getState().login({
   username: 'cashier',
-  password: '123456',
+  password: staffPassword('cashier'),
 });
 check('login as cashier', !!loggedIn && loggedIn.role === 'cashier', loggedIn?.name);
 

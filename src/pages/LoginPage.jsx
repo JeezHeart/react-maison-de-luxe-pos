@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore.js';
+import { isSupabaseConfigured } from '../lib/supabase.js';
 
 // Full-screen sign-in for the POS. Any route under /pos redirects here
 // while no user is logged in, and already-signed-in users get bounced
@@ -89,15 +90,22 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="login-credentials mt-3">
-          <strong>Demo accounts</strong>
-          <div>
-            <span>Cashier</span> <code>cashier</code> / <code>123456</code>
+        {/* Demo credentials are shown ONLY in pure-local mode (no Supabase
+            configured), where the bundled fallback accounts are genuinely the
+            way in. With Supabase configured the real accounts are used, so
+            printing working passwords on the public login screen would hand
+            them to every visitor. */}
+        {!isSupabaseConfigured && (
+          <div className="login-credentials mt-3">
+            <strong>Demo accounts</strong>
+            <div>
+              <span>Cashier</span> <code>cashier</code> / <code>123456</code>
+            </div>
+            <div>
+              <span>Manager</span> <code>manager</code> / <code>admin123</code>
+            </div>
           </div>
-          <div>
-            <span>Manager</span> <code>manager</code> / <code>admin123</code>
-          </div>
-        </div>
+        )}
 
         <Link to="/" className="login-back-link">
           ← Back to home

@@ -9,9 +9,11 @@
 //   node --env-file=.env scripts/restore-menu.mjs            # report only
 //   node --env-file=.env scripts/restore-menu.mjs --apply    # restore
 //
-// Sign-in uses the demo manager account (publishable key only; no secret).
+// Sign-in uses the manager staff account (publishable key only; no secret).
+// The password comes from POS_MANAGER_PASSWORD in your .env.
 
 import { createClient } from '@supabase/supabase-js';
+import { staffPassword } from './staff-password.mjs';
 import { MENU_ITEMS } from '../src/data/menu.js';
 
 const url = process.env.VITE_SUPABASE_URL;
@@ -30,7 +32,7 @@ const supabase = createClient(url, key, {
 const email = 'manager@maison.de.luxe';
 const { error: signInErr } = await supabase.auth.signInWithPassword({
   email,
-  password: 'admin123',
+  password: staffPassword('manager'),
 });
 if (signInErr) {
   console.error(`Sign-in failed: ${signInErr.message}`);

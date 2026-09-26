@@ -18,7 +18,16 @@ export const USERNAME_TO_EMAIL = {
   manager: 'manager@maison.de.luxe',
 };
 
-// Bundled demo accounts — used only when Supabase is NOT configured.
+// Bundled demo accounts — used ONLY when Supabase is NOT configured, i.e. the
+// pure-local mode described in the README. They are not a secret and are not a
+// real credential: with Supabase configured, `login()` goes to Supabase Auth
+// and this list is only consulted to fill in a display name/role for a session
+// saved by an older build. The live deployment has Supabase configured, so
+// these passwords do not open it.
+//
+// The *staff* passwords for a configured deployment are NOT in this file (or
+// anywhere else in the repo) — they live in Supabase Auth, and for the local
+// scripts in POS_CASHIER_PASSWORD / POS_MANAGER_PASSWORD in .env.
 export const ACCOUNTS = [
   { username: 'manager', password: 'admin123', name: 'Store Manager', role: 'manager' },
   // Supabase enforces a 6+ character minimum password; the placeholder

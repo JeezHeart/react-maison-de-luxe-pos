@@ -16,8 +16,11 @@
 // collide again. Probe rows are deleted immediately.
 //
 //   node --env-file=.env scripts/repair-menu-sequence.mjs
+//
+// Signs in as the manager staff account; password from POS_MANAGER_PASSWORD.
 
 import { createClient } from '@supabase/supabase-js';
+import { staffPassword } from './staff-password.mjs';
 
 const url = process.env.VITE_SUPABASE_URL;
 const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -32,7 +35,7 @@ const supabase = createClient(url, key, {
 
 const { error: signInErr } = await supabase.auth.signInWithPassword({
   email: 'manager@maison.de.luxe',
-  password: 'admin123',
+  password: staffPassword('manager'),
 });
 if (signInErr) {
   console.error(`Sign-in failed: ${signInErr.message}`);
