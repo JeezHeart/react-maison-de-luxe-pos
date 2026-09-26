@@ -15,6 +15,11 @@ Thumbs.db
 .idea/
 
 # Local env files — never commit secrets
+# Order matters: the broad patterns must come BEFORE the negation, otherwise
+# they override it and .env.example itself becomes ignored.
 .env
-.env.*
+.env*
 !.env.example
+
+# Vercel CLI
+.vercel

@@ -1,0 +1,10 @@
+# Vercel upload exclusions.
+# The CLI falls back to .gitignore, but be explicit so local build output and
+# local credentials can never be uploaded to a public build.
+dist
+.env
+.env.*
+!.env.example
+node_modules
+.git
+*.log
