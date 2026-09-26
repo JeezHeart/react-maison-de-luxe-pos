@@ -312,10 +312,16 @@ or write business data):
 │   │                       # · settingsStore · authStore · uiStore
 │   ├── components/         # Sidebar · InvoicePanel · ProductDetailModal ·
 │   │                       # OrderDetailsCard · SyncStatus · Toast · ReportCharts
+│   │   └── settings/       # the Settings screen's cards, one per panel:
+│   │                       # RestaurantProfile · SystemSnapshot · QuickReminders ·
+│   │                       # MenuManagement · CustomerDirectory · ManagerGate ·
+│   │                       # MenuItemEditorModal · CustomerEditorModal
 │   ├── pages/              # LandingPage · LoginPage · PosLayout · AdminLayout ·
 │   │                       # DashboardSection · OrdersSection · ReportsSection ·
-│   │                       # SettingsSection · AdminPage · ReceiptPage
-│   ├── utils/              # format (parseDate/Peso/round2) · csv (exports) · menu (images/nutrition)
+│   │                       # SettingsSection (layout only) · AdminPage · ReceiptPage
+│   ├── utils/              # format (parseDate/Peso/round2) · csv (buildOrdersCsv/exports) ·
+│   │                       # menu (images/nutrition) · dateRange (rangeBounds/filterByBounds) ·
+│   │                       # menuItemValidation · customerValidation
 │   └── data/               # menu.js (48 items) · customers.js (15) · addons.js · imageFiles.js
 ├── public/                 # index.html template, icons/, assets/images/
 ├── supabase/migrations/    # 0001_initial_schema.sql (schema + RLS + grants + check constraints)
@@ -421,7 +427,7 @@ The project ships with a three-layer verification battery:
 
 | Layer | Tool | What it proves | Count |
 |---|---|---|---|
-| **Unit tests** | Vitest | Cart never oversells stock; order IDs are unique/monotonic; stock reduce/restore math; robust date parsing (incl. Safari & Postgres timestamps) | **22 tests** |
+| **Unit tests** | Vitest | Cart never oversells stock; order IDs are unique/monotonic; stock reduce/restore math; robust date parsing (incl. Safari & Postgres timestamps); CSV escaping and scoping; date-range filtering; menu-item and customer form validation (incl. duplicate-name rules) | **85 tests** |
 | **Sync integration** | Node script vs live Supabase | Full round trip: pre-auth → place order → queue → flush → Postgres row/items/stock → pull → status update → delete + stock restore → undo flows → rename cleanups → baseline restored | **40 checks** |
 | **Smoke test** | Node script vs live Supabase | The exact API path the browser uses (auth, menu/orders/items/settings CRUD, cascade delete) | clean |
 
