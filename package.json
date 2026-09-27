@@ -16,6 +16,7 @@
     "test:smoke": "node --env-file=.env scripts/smoke-test.mjs",
     "test:unit": "vitest run",
     "check:live": "node --env-file=.env scripts/check-live.mjs",
+    "set:staff-passwords": "node scripts/set-staff-passwords.mjs",
     "assets:sizes": "node scripts/image-size.mjs"
   },
   "dependencies": {

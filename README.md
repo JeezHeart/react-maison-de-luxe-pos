@@ -411,6 +411,7 @@ npm run seed:auth       # staff accounts (cashier@ / manager@maison.de.luxe)
 | `npm run test:sync` | Full offline-first sync integration test against the live DB (40 checks) |
 | `npm run test:smoke` | Smoke test of the exact API path the browser uses (reads/writes) |
 | `npm run check:live` | Post-deploy check of the live site: page up, assets served, RLS refusing anonymous reads, staff sign-in working |
+| `npm run set:staff-passwords` | Type the two staff passwords at a hidden prompt and write them into `.env` (never echoed, never in shell history) |
 | `npm run restore:menu` | Restore the seeded menu from bundled data |
 | `npm run repair:menu-seq` | Repair the menu identity sequence drift |
 | `npm run assets:sizes` | List every image with its dimensions, file size and bytes-per-pixel |
