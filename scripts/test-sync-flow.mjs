@@ -393,6 +393,115 @@ const { data: guestFinal } = await supabase
   .maybeSingle();
 check('restore: customer row hard-deleted cleanly', !guestFinal);
 
+// 9) The oversell race itself: two registers sell the same last unit at the
+// same instant. This is the only test that can prove the database function is
+// actually atomic, because the app path above is deliberately sequential.
+const raceItem = useMenuStore.getState().addItem({
+  name: 'Race Test Dish',
+  category: 'Breakfast',
+  description: '',
+  price: 100,
+  stock: 1,
+});
+await flushQueue();
+
+const { error: raceFnMissing } = await supabase.rpc('apply_stock_movement', {
+  p_name: 'Race Test Dish',
+  p_delta: 0,
+});
+if (raceFnMissing) {
+  results.push(
+    'SKIP  atomic stock race (apply_stock_movement is not in the database yet — ' +
+      'apply supabase/migrations/0003_atomic_stock.sql)'
+  );
+} else {
+  // Both calls are fired before either is awaited, so they overlap in the
+  // database exactly as two tills would.
+  const [first, second] = await Promise.all([
+    supabase.rpc('apply_stock_movement', { p_name: 'Race Test Dish', p_delta: -1 }),
+    supabase.rpc('apply_stock_movement', { p_name: 'Race Test Dish', p_delta: -1 }),
+  ]);
+  const rowOf = (r) => (Array.isArray(r.data) ? r.data[0] : r.data);
+  const a = rowOf(first);
+  const b = rowOf(second);
+  const satisfied = [a, b].filter((r) => Number(r?.shortfall) === 0).length;
+  const refused = [a, b].filter((r) => Number(r?.shortfall) > 0).length;
+
+  check(
+    'oversell race: exactly one of two simultaneous sales is satisfied',
+    satisfied === 1 && refused === 1,
+    `satisfied=${satisfied} refused=${refused}`
+  );
+
+  const { data: raceRow } = await supabase
+    .from('menu_items')
+    .select('stock')
+    .eq('name', 'Race Test Dish')
+    .single();
+  check(
+    'oversell race: stock floors at zero, never goes negative',
+    Number(raceRow?.stock) === 0,
+    `stock=${raceRow?.stock}`
+  );
+
+  // A restock after a refused sale still works, so the shortfall path leaves
+  // the item in a usable state rather than wedged.
+  await supabase.rpc('apply_stock_movement', { p_name: 'Race Test Dish', p_delta: 2 });
+  const { data: raceRestocked } = await supabase
+    .from('menu_items')
+    .select('stock')
+    .eq('name', 'Race Test Dish')
+    .single();
+  check(
+    'oversell race: item is still sellable after a shortfall',
+    Number(raceRestocked?.stock) === 2,
+    `stock=${raceRestocked?.stock}`
+  );
+
+  // The explicit recount path a manager uses after any shortfall.
+  await supabase.rpc('set_menu_item_stock', { p_name: 'Race Test Dish', p_value: 9 });
+  const { data: raceCounted } = await supabase
+    .from('menu_items')
+    .select('stock')
+    .eq('name', 'Race Test Dish')
+    .single();
+  check(
+    'oversell race: an explicit recount sets the exact count',
+    Number(raceCounted?.stock) === 9,
+    `stock=${raceCounted?.stock}`
+  );
+
+  // An anonymous caller must not be able to move stock: the function is
+  // security invoker, so RLS refuses it before the update is reached.
+  const { createClient } = await import('@supabase/supabase-js');
+  const anon = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: false },
+  });
+  const { error: anonError } = await anon.rpc('apply_stock_movement', {
+    p_name: 'Race Test Dish',
+    p_delta: -1,
+  });
+  const { data: raceAfterAnon } = await supabase
+    .from('menu_items')
+    .select('stock')
+    .eq('name', 'Race Test Dish')
+    .single();
+  check(
+    'oversell race: an anonymous caller cannot move stock',
+    Boolean(anonError) && Number(raceAfterAnon?.stock) === 9,
+    anonError ? `refused: ${anonError.code || anonError.message}` : 'ALLOWED - stock function bypasses RLS'
+  );
+
+  useMenuStore.getState().deleteItem(raceItem.id);
+  await flushQueue();
+  const { data: raceGone } = await supabase
+    .from('menu_items')
+    .select('id')
+    .eq('name', 'Race Test Dish')
+    .maybeSingle();
+  check('oversell race: test row cleaned up', !raceGone);
+}
+
 // Final proof the whole run left the inventory at its baseline.
 const { data: avoFinal } = await supabase
   .from('menu_items')

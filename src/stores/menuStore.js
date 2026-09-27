@@ -79,7 +79,7 @@ export const useMenuStore = create((set, get) => ({
     const next = [...items, item];
     set({ items: next });
     persistMenu(get());
-    enqueue({ table: 'menu', action: 'upsert', payload: item });
+    enqueue({ table: 'menu', action: 'upsert', setStock: true, payload: item });
     return item;
   },
 
@@ -107,8 +107,22 @@ export const useMenuStore = create((set, get) => ({
       // on the next pull as a duplicate). Delete first, then upsert.
       if (target && updated.name !== target.name) {
         enqueue({ table: 'menu', action: 'delete', name: target.name });
+        // A new name is a genuinely new row, so it has to seed its own stock.
+        enqueue({ table: 'menu', action: 'upsert', setStock: true, payload: updated });
+      } else {
+        // A plain edit (a price change, say) must not carry this device's idea
+        // of the stock along with it, or it would overwrite whatever the
+        // server has decremented since. Stock only moves when the manager
+        // actually changed the field, and then as an authoritative recount.
+        if (target && data.stock != null && Number(data.stock) !== Number(target.stock)) {
+          enqueue({
+            table: 'stockSet',
+            action: 'set',
+            payload: { name: updated.name, stock: Math.max(0, Number(updated.stock) || 0) },
+          });
+        }
+        enqueue({ table: 'menu', action: 'upsert', payload: updated });
       }
-      enqueue({ table: 'menu', action: 'upsert', payload: updated });
     }
   },
 
@@ -132,7 +146,7 @@ export const useMenuStore = create((set, get) => ({
     const next = [...get().items, item];
     set({ items: next });
     persistMenu(get());
-    enqueue({ table: 'menu', action: 'upsert', payload: item });
+    enqueue({ table: 'menu', action: 'upsert', setStock: true, payload: item });
   },
 
   addCategory: (name) => {
@@ -187,12 +201,16 @@ export const useMenuStore = create((set, get) => ({
     set({ categories: seed.categories, items: seed.items });
     persistMenu(get());
     for (const item of seed.items) {
-      enqueue({ table: 'menu', action: 'upsert', payload: item });
+      enqueue({ table: 'menu', action: 'upsert', setStock: true, payload: item });
     }
   },
 
   // Decrement stock for the named item (used when an order is placed).
-  // Never goes below zero; missing items are skipped silently.
+  // The local number updates immediately so the UI is instant, but the change
+  // is queued as a *movement* for the database to apply atomically — never as
+  // an absolute upsert, which is what let two registers sell the same last
+  // unit without either noticing. Never goes below zero locally; missing
+  // items are skipped silently.
   reduceStock: (name, qty = 1) => {
     const amount = Math.max(1, Number(qty) || 1);
     set({
@@ -203,10 +221,11 @@ export const useMenuStore = create((set, get) => ({
       ),
     });
     persistMenu(get());
-    const reduced = get().items.find((m) => m.name === String(name));
-    if (reduced) {
-      enqueue({ table: 'menu', action: 'upsert', payload: reduced });
-    }
+    enqueue({
+      table: 'stock',
+      action: 'decrement',
+      payload: { name: String(name), qty: amount },
+    });
   },
 
   // Re-stock the named item (used when a sale is undone/deleted). Missing
@@ -219,10 +238,11 @@ export const useMenuStore = create((set, get) => ({
       ),
     });
     persistMenu(get());
-    const restored = get().items.find((m) => m.name === String(name));
-    if (restored) {
-      enqueue({ table: 'menu', action: 'upsert', payload: restored });
-    }
+    enqueue({
+      table: 'stock',
+      action: 'increment',
+      payload: { name: String(name), qty: amount },
+    });
   },
 
   // Pull the shared catalog into this device. Remote wins; local-only

@@ -8,7 +8,7 @@
 // It's a no-op when Supabase isn't configured (pure-local mode).
 
 import { supabase, isSupabaseConfigured } from './supabase.js';
-import { flushQueue, enqueue, readQueue, onQueueChange } from './sync.js';
+import { flushQueue, enqueue, readQueue, onQueueChange, onStockShortfall } from './sync.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useOrderStore } from '../stores/orderStore.js';
 import { useMenuStore } from '../stores/menuStore.js';
@@ -40,7 +40,9 @@ async function enqueueLocalOnlyDiffs() {
     const remoteNames = new Set((remoteItems || []).map((m) => m.name));
     for (const item of localItems) {
       if (!remoteNames.has(item.name)) {
-        enqueue({ table: 'menu', action: 'upsert', payload: item });
+        // Not in the database yet, so this row's stock is the only copy there
+        // is — it has to be seeded rather than moved.
+        enqueue({ table: 'menu', action: 'upsert', setStock: true, payload: item });
       }
     }
   }
@@ -112,6 +114,19 @@ export function startSyncController() {
     return;
   }
   started = true;
+
+  // Another register sold the stock before this one could. The order is
+  // recorded either way, but the count is now known to be wrong, so say so
+  // rather than letting the two registers quietly disagree.
+  onStockShortfall(({ name, shortfall, stock }) => {
+    const units = shortfall === 1 ? 'unit' : 'units';
+    useUIStore
+      .getState()
+      .showToast(
+        `Stock ran out at another register: ${name} is short by ${shortfall} ${units} (count now ${stock}). Worth a recount.`,
+        7000
+      );
+  });
 
   // New queued work (order placed, edit, delete, undo, restock…) triggers a
   // sync within ~1.2s instead of waiting for the 30s tick — two registers

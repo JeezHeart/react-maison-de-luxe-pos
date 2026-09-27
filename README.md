@@ -431,7 +431,7 @@ The project ships with a three-layer verification battery:
 
 | Layer | Tool | What it proves | Count |
 |---|---|---|---|
-| **Unit tests** | Vitest | Cart never oversells stock; order IDs are unique/monotonic; stock reduce/restore math; robust date parsing (incl. Safari & Postgres timestamps); CSV escaping and scoping; date-range filtering; menu-item and customer form validation (incl. duplicate-name rules); bundled demo credentials can never collide with a live staff password, and the manager PIN is checked against Supabase rather than a hardcoded string | **97 tests** |
+| **Unit tests** | Vitest | Cart never oversells stock; order IDs are unique/monotonic; stock reduce/restore math; robust date parsing (incl. Safari & Postgres timestamps); CSV escaping and scoping; date-range filtering; menu-item and customer form validation (incl. duplicate-name rules); bundled demo credentials can never collide with a live staff password; the manager PIN is checked against Supabase rather than a hardcoded string; stock reaches the database as an atomic movement and a menu edit never writes stock back | **118 tests** |
 | **Sync integration** | Node script vs live Supabase | Full round trip: pre-auth → place order → queue → flush → Postgres row/items/stock → pull → status update → delete + stock restore → undo flows → rename cleanups → baseline restored | **40 checks** |
 | **Smoke test** | Node script vs live Supabase | The exact API path the browser uses (auth, menu/orders/items/settings CRUD, cascade delete) | clean |
 
@@ -505,6 +505,37 @@ needs no code change: update the password in Supabase, then re-run
 > were established with the old one, so delete any stale rows in
 > `auth.sessions` (`select … from auth.sessions`) to evict anyone who signed in
 > while they were public.
+
+### Concurrent registers and stock (oversell)
+
+Two tills selling the same last unit used to be a silent data-loss bug. Each
+register computed its own new stock number from its own copy and upserted that
+absolute value; whichever synced last won, and the database ended up agreeing
+with it. Nothing recorded that two units had been sold against one, so a
+physical recount was the only way to find out.
+
+Stock is now **owned by the database** and only ever moved, never overwritten:
+
+| Operation | How it reaches Postgres |
+|---|---|
+| Sale / undo-delete restock | `apply_stock_movement(name, ±qty)` — row-locked, atomic, clamped at 0 |
+| Manager recount in the menu editor | `set_menu_item_stock(name, count)` — authoritative set |
+| New menu item, or an item renamed to a new name | Seeds its own `stock` on insert (the only absolute write) |
+| Any other menu edit (price, description) | Sends **no** `stock` column at all |
+
+The function is `security invoker`, so Row Level Security still applies and an
+anonymous caller is refused — it can do nothing the calling role could not
+already do. When a movement cannot be satisfied the server reports the
+shortfall and the app raises a toast naming the item, so the bad count reaches a
+person instead of disappearing into whichever register synced last. The sale
+itself is still recorded: the money changed hands.
+
+**Applying the migration.** `supabase/migrations/0003_atomic_stock.sql` adds the
+two functions. Until it is applied, the app detects the missing function and
+falls back to the old non-atomic write with a console warning, so a deploy can
+safely land before the migration — but **the race stays open until the migration
+is applied.** `npm run test:sync` prints `SKIP atomic stock race` while it is
+missing, and exercises the real two-simultaneous-sales case once it is there.
 
 ---
 

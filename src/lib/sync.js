@@ -71,6 +71,24 @@ export function onQueueChange(listener) {
   return () => queueListeners.delete(listener);
 }
 
+// Fired when the database refused to satisfy a stock movement because another
+// register had already sold the units. The sale stands, but the count is known
+// to be wrong, so this has to reach a person rather than stay in a log.
+const shortfallListeners = new Set();
+export function onStockShortfall(listener) {
+  shortfallListeners.add(listener);
+  return () => shortfallListeners.delete(listener);
+}
+function notifyStockShortfall(detail) {
+  for (const listener of shortfallListeners) {
+    try {
+      listener(detail);
+    } catch (e) {
+      // a broken listener must not strand the op in the queue
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch helpers — one DB write per queued op.
 // ---------------------------------------------------------------------------
@@ -165,17 +183,94 @@ async function dispatchMenu(op) {
     return;
   }
   const item = op.payload || {};
-  const { error } = await supabase.from('menu_items').upsert(
-    {
-      name: item.name,
-      category: item.category,
-      description: item.description || '',
-      price: round2(Number(item.price) || 0),
-      stock: Number(item.stock) || 0,
-    },
-    { onConflict: 'name' }
-  );
+  const row = {
+    name: item.name,
+    category: item.category,
+    description: item.description || '',
+    price: round2(Number(item.price) || 0),
+  };
+  // Stock is owned by apply_stock_movement. Writing an absolute number here
+  // would resurrect the lost update this replaced: a manager editing a price
+  // carries whatever stock this device happens to believe in, and that would
+  // overwrite whatever the server has since decremented. Only a row that does
+  // not exist yet seeds its own stock.
+  if (op.setStock) {
+    row.stock = Math.max(0, Number(item.stock) || 0);
+  }
+  const { error } = await supabase.from('menu_items').upsert(row, { onConflict: 'name' });
   if (error) throw error;
+}
+
+// Before migration 0003 the database has no apply_stock_movement. Rather than
+// stranding every stock change in the queue if the app is deployed ahead of the
+// migration, fall back to the old absolute write and say so once. This keeps the
+// rollout order-independent; the moment the function exists the atomic path is
+// used and the race is closed. The fallback still has the lost-update flaw, so
+// it is a bridge, not a permanent answer.
+let warnedMissingFn = false;
+function isMissingFunction(error) {
+  const code = error?.code || '';
+  const message = String(error?.message || '');
+  return (
+    code === 'PGRST202' ||
+    code === '42883' ||
+    /could not find the function|does not exist/i.test(message)
+  );
+}
+
+async function legacyStockWrite(name, stock) {
+  const { error } = await supabase
+    .from('menu_items')
+    .update({ stock: Math.max(0, Number(stock) || 0) })
+    .eq('name', name);
+  if (error) throw error;
+}
+
+async function movementWithFallback(name, delta) {
+  const { data, error } = await supabase.rpc('apply_stock_movement', {
+    p_name: name,
+    p_delta: delta,
+  });
+  if (error) {
+    if (!isMissingFunction(error)) throw error;
+    if (!warnedMissingFn) {
+      warnedMissingFn = true;
+      console.warn(
+        '[sync] apply_stock_movement is missing - apply supabase/migrations/0003_atomic_stock.sql. ' +
+          'Falling back to a non-atomic stock write, so two registers can oversell until it is applied.'
+      );
+    }
+    const { data: row, error: readError } = await supabase
+      .from('menu_items')
+      .select('stock')
+      .eq('name', name)
+      .maybeSingle();
+    if (readError) throw readError;
+    const next = Math.max(0, (Number(row?.stock) || 0) + delta);
+    await legacyStockWrite(name, next);
+    return { item_name: name, stock: next, shortfall: 0 };
+  }
+  return Array.isArray(data) ? data[0] : data;
+}
+
+// Stock movements go through the database function rather than an upsert, so
+// two registers cannot both write their own idea of the remaining stock.
+async function dispatchStock(op) {
+  const row = op.payload || {};
+  const name = String(row.name || '');
+  if (!name) {
+    return;
+  }
+  const qty = Math.max(1, Number(row.qty) || 1);
+  const delta = op.action === 'increment' ? qty : -qty;
+  const result = await movementWithFallback(name, delta);
+  const shortfall = Number(result?.shortfall) || 0;
+  if (shortfall > 0) {
+    // Another register sold this stock first. The sale is real — the money
+    // changed hands — so it is recorded either way, but the count is now known
+    // to be wrong and someone has to recount.
+    notifyStockShortfall({ name, shortfall, stock: Number(result?.stock) || 0 });
+  }
 }
 
 async function dispatchSettings(op) {
@@ -207,9 +302,31 @@ async function dispatchCustomers(op) {
   if (error) throw error;
 }
 
+// A manager typing a real count into the menu editor means "there are exactly
+// this many", which is an absolute set rather than a movement.
+async function dispatchStockSet(op) {
+  const row = op.payload || {};
+  const name = String(row.name || '');
+  if (!name) {
+    return;
+  }
+  const value = Math.max(0, Number(row.stock) || 0);
+  const { error } = await supabase.rpc('set_menu_item_stock', {
+    p_name: name,
+    p_value: value,
+  });
+  if (error) {
+    if (!isMissingFunction(error)) throw error;
+    await legacyStockWrite(name, value);
+    return;
+  }
+}
+
 const DISPATCHERS = {
   orders: dispatchOrder,
   menu: dispatchMenu,
+  stock: dispatchStock,
+  stockSet: dispatchStockSet,
   customers: dispatchCustomers,
   settings: dispatchSettings,
 };
