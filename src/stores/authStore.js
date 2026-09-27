@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
+import { supabase, isSupabaseConfigured, verifyPassword } from '../lib/supabase.js';
 
 // Authentication & roles. With Supabase configured, the username login is
 // mapped to a Supabase Auth account and the session is managed by the
@@ -25,14 +25,17 @@ export const USERNAME_TO_EMAIL = {
 // saved by an older build. The live deployment has Supabase configured, so
 // these passwords do not open it.
 //
+// The values are deliberately prefixed `demo-` so that nothing shipped in the
+// bundle can be mistaken for — or collide with — a real staff credential.
+// `tests/demoCredentials.test.js` fails the build if either one ever matches a
+// live POS_*_PASSWORD.
+//
 // The *staff* passwords for a configured deployment are NOT in this file (or
 // anywhere else in the repo) — they live in Supabase Auth, and for the local
 // scripts in POS_CASHIER_PASSWORD / POS_MANAGER_PASSWORD in .env.
 export const ACCOUNTS = [
-  { username: 'manager', password: 'admin123', name: 'Store Manager', role: 'manager' },
-  // Supabase enforces a 6+ character minimum password; the placeholder
-  // '1234' demo login became '123456'.
-  { username: 'cashier', password: '123456', name: 'Main Cashier', role: 'cashier' },
+  { username: 'manager', password: 'demo-manager-only', name: 'Store Manager', role: 'manager' },
+  { username: 'cashier', password: 'demo-cashier-only', name: 'Main Cashier', role: 'cashier' },
 ];
 
 function loadSession() {
@@ -168,10 +171,20 @@ export const useAuthStore = create((set, get) => ({
 
   // Cashier-facing destructive actions check this before running.
   managerAuthorizedUntil: 0,
-  authorizeManager: (pin) => {
-    const ok = ACCOUNTS.some(
-      (a) => a.role === 'manager' && a.password === String(pin || '')
-    );
+  // Approves a destructive action for a short window. With Supabase configured
+  // the PIN is verified against the real manager account via `verifyPassword`,
+  // so it can no longer be a hardcoded string sitting in the public bundle.
+  // Returns a promise; callers must await it.
+  authorizeManager: async (pin) => {
+    const value = String(pin || '');
+    if (!value) {
+      return false;
+    }
+    const remote = await verifyPassword(USERNAME_TO_EMAIL.manager, value);
+    const ok =
+      remote === null
+        ? ACCOUNTS.some((a) => a.role === 'manager' && a.password === value)
+        : remote;
     if (!ok) {
       return false;
     }

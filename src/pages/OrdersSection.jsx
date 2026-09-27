@@ -44,6 +44,7 @@ export default function OrdersSection() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [pinShake, setPinShake] = useState(false);
+  const [pinChecking, setPinChecking] = useState(false);
   const [view, setView] = useState('table'); // 'table' | 'board'
   const [dragOverStatus, setDragOverStatus] = useState(null);
 
@@ -84,14 +85,27 @@ export default function OrdersSection() {
     setPinError(false);
   };
 
-  const handlePinSubmit = (e) => {
+  const handlePinSubmit = async (e) => {
     e.preventDefault();
-    const ok = authorizeManager(pinInput);
+    if (pinChecking) return;
+    setPinChecking(true);
+    let ok = false;
+    try {
+      // The PIN is checked against Supabase Auth, so this is a network round
+      // trip. Stay in the pending state until it answers — otherwise a slow
+      // connection looks like a wrong PIN.
+      ok = await authorizeManager(pinInput);
+    } catch {
+      ok = false;
+    } finally {
+      setPinChecking(false);
+    }
     if (ok && deleteTarget) {
       confirmDelete(deleteTarget);
       setDeleteTarget(null);
       setPinInput('');
-    } else {
+      setPinError(false);
+    } else if (!ok) {
       setPinError(true);
       setPinShake(true);
       setTimeout(() => setPinShake(false), 650);
@@ -340,12 +354,16 @@ export default function OrdersSection() {
                 inputMode="numeric"
                 className="field-control mb-1"
                 autoFocus
+                disabled={pinChecking}
                 placeholder="Enter manager PIN"
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
               />
-              {pinError ? (
+              {pinError && !pinChecking ? (
                 <p className="form-error text-sm mb-2">Incorrect PIN. Try again.</p>
+              ) : null}
+              {pinChecking ? (
+                <p className="text-sm text-muted mb-2">Checking…</p>
               ) : null}
               <div className="flex gap-2 mt-2">
                 <button
@@ -355,8 +373,8 @@ export default function OrdersSection() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-outline-danger-pos btn-sm-pos">
-                  Delete Order
+                <button type="submit" className="btn-outline-danger-pos btn-sm-pos" disabled={pinChecking}>
+                  {pinChecking ? 'Checking…' : 'Delete Order'}
                 </button>
               </div>
             </form>

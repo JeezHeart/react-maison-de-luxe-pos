@@ -98,7 +98,9 @@ attempting to open the other workspace bounces you back to your own.
 > **Manager PIN convenience:** when a *cashier* deletes an order, the app asks
 > for the manager's PIN once. After a correct entry, the cashier is
 > "authorized" for **5 minutes**, so several deletions can happen without
-> re-entering the PIN.
+> re-entering the PIN. The entry is the manager's real account password, checked
+> against Supabase Auth (the prompt shows "Checking…" because it is a network
+> round-trip), so there is no fixed PIN to read out of the bundle.
 
 ---
 
@@ -429,7 +431,7 @@ The project ships with a three-layer verification battery:
 
 | Layer | Tool | What it proves | Count |
 |---|---|---|---|
-| **Unit tests** | Vitest | Cart never oversells stock; order IDs are unique/monotonic; stock reduce/restore math; robust date parsing (incl. Safari & Postgres timestamps); CSV escaping and scoping; date-range filtering; menu-item and customer form validation (incl. duplicate-name rules) | **85 tests** |
+| **Unit tests** | Vitest | Cart never oversells stock; order IDs are unique/monotonic; stock reduce/restore math; robust date parsing (incl. Safari & Postgres timestamps); CSV escaping and scoping; date-range filtering; menu-item and customer form validation (incl. duplicate-name rules); bundled demo credentials can never collide with a live staff password, and the manager PIN is checked against Supabase rather than a hardcoded string | **97 tests** |
 | **Sync integration** | Node script vs live Supabase | Full round trip: pre-auth → place order → queue → flush → Postgres row/items/stock → pull → status update → delete + stock restore → undo flows → rename cleanups → baseline restored | **40 checks** |
 | **Smoke test** | Node script vs live Supabase | The exact API path the browser uses (auth, menu/orders/items/settings CRUD, cascade delete) | clean |
 
@@ -468,11 +470,41 @@ public bundle, so a secret key there would be exposed to the world.
 - `.env` is gitignored — credentials are never committed.
 - **Staff passwords are not in this repository.** They live in Supabase Auth
   and, for the local scripts, in `POS_CASHIER_PASSWORD` / `POS_MANAGER_PASSWORD`
-  in your gitignored `.env`. Nothing under `VITE_` is a password. The login
-  screen only shows the bundled demo credentials in pure-local mode, so a real
+  in your gitignored `.env`. Use `npm run set:staff-passwords` to write them
+  locally at a hidden prompt, so a password never reaches a chat, a shell
+  history, or a commit. Nothing under `VITE_` is a password. The login screen
+  only shows the bundled demo credentials in pure-local mode, so a real
   deployment never displays a working password.
+- **Nothing in the shipped bundle authenticates anything.** The only passwords
+  it contains are the pure-local demo pair, both prefixed `demo-`, and
+  `tests/demoCredentials.test.js` fails the build if either ever equals a live
+  `POS_*_PASSWORD`.
+- **The manager approval PIN is verified against Supabase Auth.** The pin a
+  cashier enters to approve an order deletion used to be a hardcoded string
+  compared in the browser, which meant it was readable in view-source and
+  bypassable by anyone at the terminal. It now authenticates the real manager
+  account through a throwaway Supabase client, so the cashier's own session is
+  left untouched, and there is no PIN in the bundle to copy.
   ⚠️ Anyone who can reach the app can reach the login form — set unique
   passwords, and change them if they were ever reused or published.
+
+### Accepted risk: current password strength
+
+The two staff passwords are currently a role name plus the year plus `!`
+(e.g. `manager2026!`). That is a weak pattern — a dictionary word plus the
+current year is among the first things a password-cracking wordlist tries — and
+both values have been pasted into a chat transcript. This was raised and the
+owner chose to accept it rather than delay the rollout.
+
+Recorded here so the trade-off is visible rather than forgotten. Rotating later
+needs no code change: update the password in Supabase, then re-run
+`npm run set:staff-passwords`.
+
+> **Related, still open:** these passwords sat in a public GitHub repository
+> before the rotation. Changing a password does **not** invalidate sessions that
+> were established with the old one, so delete any stale rows in
+> `auth.sessions` (`select … from auth.sessions`) to evict anyone who signed in
+> while they were public.
 
 ---
 

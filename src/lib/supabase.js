@@ -30,3 +30,27 @@ export const supabase = isSupabaseConfigured
       },
     })
   : null;
+
+// Verify a password against Supabase Auth without disturbing the signed-in
+// session. A throwaway client authenticates, the answer is read, and the client
+// is discarded — so a cashier approving a destructive action does not silently
+// become the manager for the rest of the session.
+//
+// Returns null when Supabase is not configured, which tells the caller to fall
+// back to the bundled local-mode accounts.
+export async function verifyPassword(email, password) {
+  if (!isSupabaseConfigured) return null;
+  const probe = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  try {
+    const { data, error } = await probe.auth.signInWithPassword({ email, password });
+    return !error && Boolean(data?.user);
+  } catch {
+    return false;
+  } finally {
+    // Invalidate the probe's session so no spare token is left usable. Not
+    // awaited: the answer is already known and a failure here changes nothing.
+    probe.auth.signOut().catch(() => {});
+  }
+}

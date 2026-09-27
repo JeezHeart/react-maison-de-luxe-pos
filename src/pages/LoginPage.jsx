@@ -99,10 +99,10 @@ export default function LoginPage() {
           <div className="login-credentials mt-3">
             <strong>Demo accounts</strong>
             <div>
-              <span>Cashier</span> <code>cashier</code> / <code>123456</code>
+              <span>Cashier</span> <code>cashier</code> / <code>demo-cashier-only</code>
             </div>
             <div>
-              <span>Manager</span> <code>manager</code> / <code>admin123</code>
+              <span>Manager</span> <code>manager</code> / <code>demo-manager-only</code>
             </div>
           </div>
         )}
