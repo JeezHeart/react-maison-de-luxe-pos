@@ -45,7 +45,8 @@ restaurant settings — and it keeps working even with **no internet connection*
 13. [Deployment (Vercel)](#deployment-vercel)
 14. [Security & Keys](#security--keys)
 15. [Data & Persistence Details](#data--persistence-details)
-16. [Known Limitations (Honest Notes)](#known-limitations-honest-notes)
+16. [Suggesting a New Feature (for mentors & the professor)](#suggesting-a-new-feature)
+17. [Known Limitations (Honest Notes)](#known-limitations-honest-notes)
 
 ---
 
@@ -76,6 +77,37 @@ restaurant settings — and it keeps working even with **no internet connection*
         │        — the shared source of truth —          │
         └───────────────────────────────────────────────┘
 ```
+
+### What all that means in everyday words
+
+Imagine the system as **a shared order notebook for the restaurant**:
+
+- **localStorage** — the page each device keeps for itself. A sale is written
+  down instantly, so the cash register never waits or freezes.
+- **Supabase (the cloud database)** — the main filing cabinet that holds the
+  single, shared copy of every menu, order, customer, and setting.
+- **Syncing** — whenever a device is online, it photocopies its new entries
+  into the cabinet and pulls back anything other devices added. If the
+  internet drops, the device just writes in its own page and catches up later.
+- **PWA / "install"** — like adding an app icon to your phone or tablet, so
+  the register opens instantly even with no signal.
+
+**Words you will meet in this document:**
+
+| Word | What it means in plain English |
+|---|---|
+| **offline-first** | Designed to keep working with no internet |
+| **sync / syncing** | Copying new or changed information between devices and the cloud |
+| **cloud / Supabase** | An internet storage service that all the devices share |
+| **localStorage** | The browser's built-in memory on each device |
+| **PWA (Progressive Web App)** | A website that can be installed and opened like a phone app |
+| **toast** | A small message that pops up briefly to confirm an action |
+| **kanban** | A board with columns where you drag cards between them |
+| **CSV export** | Downloading the records as a spreadsheet file |
+| **receipt** | A printable copy of a single order |
+| **stock** | How many servings/units of an item are left |
+| **manager PIN** | The manager's password, used to approve sensitive actions |
+| **RLS (Row Level Security)** | The locks on each record so only signed-in staff can open them |
 
 ---
 
@@ -264,6 +296,12 @@ Express/FastAPI/Django API to deploy or maintain; the "backend" role is
 provided entirely by **Supabase**, a managed cloud platform, which the browser
 talks to directly over HTTPS. The web hosts (Vercel, Render) only serve the
 compiled static app — they never execute business logic.
+
+> **In plain terms:** imagine the app as a cash register that keeps a shared
+> filing cabinet on the internet. There is no "IT room" in this project — the
+> filing cabinet (Supabase) does the storing, the security, and the staff
+> logins, and the website itself simply opens the right drawer for whoever is
+> signed in.
 
 ### What plays the backend role
 
@@ -577,6 +615,12 @@ needs no code change: update the password in Supabase, then re-run
 
 ### Concurrent registers and stock (oversell)
 
+> **In plain words:** two cash registers once could sell the same last dish at
+> the same moment, and the missing serving would silently vanish from the
+> books. Now the shared database decides, one order at a time, who gets it —
+> and tells the losing register what happened so a person can do a physical
+> count.
+
 Two tills selling the same last unit used to be a silent data-loss bug. Each
 register computed its own new stock number from its own copy and upserted that
 absolute value; whichever synced last won, and the database ended up agreeing
@@ -636,17 +680,44 @@ missing, and exercises the real two-simultaneous-sales case once it is there.
 - **Deletes are undoable** — deleting an order, menu item, or customer shows a
   4-second **Undo** toast that re-inserts the record locally and re-syncs it
   to the cloud. Deleting an order also returns the sold stock to inventory.
-- **Collision-safe order ids** — new orders use epoch-millis + a per-device
-  randomized counter, so multiple POS devices can place orders simultaneously;
-  the numeric id still sorts newest-first and fits the `bigint` column.
-- **Stored timestamps parse anywhere** — the `"YYYY-MM-DD HH:mm:ss"` strings
-  are normalized before `new Date()` (Safari-safe), and Postgres microsecond
-  timestamps are trimmed, keeping order sorting/report buckets correct.
+- **Order IDs never clash** — each order gets a 16-digit number made from the
+  time (in milliseconds) plus a random "device number" saved on that device.
+  Two registers can therefore take orders at the exact same moment without
+  ever getting the same ID, and the newest order still sorts first.
+- **Dates and times display correctly everywhere** — order timestamps are
+  written in one simple format and read back the same way on every browser and
+  in the database, so sorting by "newest first" and the report ranges are
+  always right.
 - **System snapshot** — "Total Users" reflects the live staff count from the
   `profiles` table (falls back to the local estimate while offline).
 - **Near-instant register sync** — any queued change (sale, edit, delete,
   undo) triggers a sync pass within ~1.2s (the 30s periodic tick is the
   backstop).
+
+---
+
+## Suggesting a New Feature
+
+The best feature requests are **outcome-based**: describe what you wish the app
+could do for the restaurant, not how you expect it to be built. The team can
+usually map any request to a screen and a build plan.
+
+| If you say… | We hear… | Likely home in the app |
+|---|---|---|
+| "I want to know which dishes make the most money this month." | A fuller report filter by date range and item | Reports (both roles) |
+| "I want to pause an item so it can't be ordered today." | An "out of stock" toggle on menu items | Menu Management |
+| "I want a copy of the day's sales emailed at closing time." | Automatic daily report export | Reports / Settings |
+| "I want to split one bill across two customers." | Split-payment support at checkout | POS register |
+| "I want staff to clock in and out." | A time-tracking module | Settings / a new screen |
+| "I want to warn the kitchen about special requests." | Notes attached to order items | POS register / kitchen view |
+
+A simple way to suggest something:
+
+1. Start with one sentence: **"I wish the app could…"**
+2. Add the *who* (cashier or manager), the *when* (which screen or step), and
+   the *why* (what problem it solves).
+3. The more specific the example ("during the Tuesday lunch rush…"), the
+   easier it is to plan and build.
 
 ---
 

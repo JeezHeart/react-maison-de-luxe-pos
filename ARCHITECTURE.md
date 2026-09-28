@@ -14,6 +14,13 @@ deployment topology. Companion docs:
 > source kept in a collapsible block beneath it for editing. Regenerate after
 > editing with `npm run render:diagrams`.
 
+> **The whole system in plain English:** the app is a website that works like
+> a native cash-register app. Each device keeps its own working copy of the
+> data so the register never pauses waiting for the internet; a background
+> helper quietly keeps all the copies in step through one shared online
+> database. The diagrams below show how those pieces connect — the browser
+> screens, the stores that hold data, the sync helper, and the cloud database.
+
 ---
 
 ## 1. Architecture at a Glance
@@ -94,6 +101,11 @@ src/
 
 ## 3. Core Flow — Placing an Order (offline-first end to end)
 
+> **In plain words:** this is the moment the restaurant cares about most — the
+> sale. Notice the order is saved on the device *immediately* (the receipt
+> shows, nothing waits on the internet), and the cloud copy happens a moment
+> later in the background.
+
 <p align="center"><img src="docs/img/architecture-2.svg" alt="Placing an order — offline-first sequence" style="max-width:100%"></p>
 
 <details>
@@ -172,6 +184,10 @@ other, so one bad row can't wedge the register.
 
 ## 5. Concurrency & Consistency Model
 
+> **In plain words:** what happens when two registers change the same thing at
+> the same time — the classic example being two cashiers selling the last
+> serving of a dish.
+
 ### 5.1 Why registers can't corrupt a shared counter
 
 <p align="center"><img src="docs/img/architecture-4.svg" alt="Atomic stock — two registers racing the last unit" style="max-width:100%"></p>
@@ -237,6 +253,10 @@ flowchart LR
 ---
 
 ## 6. Security Architecture
+
+> **In plain words:** what protects the data and the logins. The big idea: the
+> database only trusts people who are actually signed in as staff, and nothing
+> secret is ever hidden inside the website itself.
 
 <p align="center"><img src="docs/img/architecture-6.svg" alt="Security architecture" style="max-width:100%"></p>
 

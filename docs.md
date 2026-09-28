@@ -10,6 +10,13 @@ setup), see [README.md](./README.md).
 > Status of this document: **2026-09-28** — reflects the live production state
 > (Vercel + Render deployed, Supabase migration `0003` applied, QA battery green).
 
+> **In plain English:** this app runs entirely in the browser and keeps a
+> personal copy of its data on each device. Every screen saves instantly, and a
+> background helper quietly uploads those saves to a shared online database
+> (Supabase) and pulls down anything other devices saved — so several cash
+> registers stay in agreement without anyone pressing a button. This document
+> is a guide to how that machinery works and how to look after it.
+
 ---
 
 ## 1. System Overview
@@ -65,6 +72,12 @@ setup), see [README.md](./README.md).
 
 ## 3. The Sync Engine (`src/lib/sync.js` + `syncController.js`)
 
+> **In plain words:** changes are never sent to the cloud one-by-one as they
+> happen. They are dropped into a "to-do list" (the queue) saved on the device,
+> and a background helper works through that list whenever the device has a
+> connection, then refreshes the local copy from the cloud. If the internet
+> fails, the list simply waits and resumes later — nothing is lost.
+
 ### 3.1 Queue op shapes
 
 A queue op is a single flat object with `{ table, action, ... }`:
@@ -117,6 +130,12 @@ it is hidden entirely in pure-local mode.
 
 ## 4. Atomic Stock (the multi-register oversell fix)
 
+> **In plain words:** the fix for "two registers sell the same last dish at the
+> same time." Instead of each register writing its own guess of the new stock
+> count, the database itself subtracts servings one at a time. Whichever
+> register arrives second is told the dish is gone, and the app flags it for a
+> manual check — nobody's numbers silently overwrite each other.
+
 Prior design: the browser computed an **absolute** stock number and upserted it.
 Two registers selling the same last unit each wrote their own value and the last
 write won — a *silent* lost update.
@@ -156,6 +175,10 @@ caller refused, no residue).
 
 ## 5. Order Identity
 
+> **In plain words:** every order gets a unique number made from the current
+> time combined with a random "device number" saved on that device, so two
+> registers can place orders at the exact same moment and never collide.
+
 `nextOrderId()` (in `orderStore`) produces collision-safe 16‑digit numeric IDs:
 
 ```
@@ -188,6 +211,11 @@ id = Date.now() × 1000  +  perDeviceSuffix
 ---
 
 ## 7. Auth & Security
+
+> **In plain words:** staff logs in with a username and password that only
+> exist in the cloud — nothing secret is baked into the app. Even the cashier's
+> "delete order" approval is the manager's real password, checked live, so
+> there is no hidden code to reverse-engineer.
 
 ### 7.1 Sign-in
 
