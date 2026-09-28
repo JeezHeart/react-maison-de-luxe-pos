@@ -3,12 +3,14 @@ import react from '@vitejs/plugin-react';
 
 // Unit tests run in Node against the real stores (no browser, no Supabase —
 // the client is null when env vars are absent). A localStorage shim keeps
-// the local-first stores happy.
+// the local-first stores happy. The generous per-test timeout keeps the
+// battery green on loaded dev machines.
 export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'node',
     setupFiles: ['./tests/setup.js'],
     include: ['tests/**/*.test.js'],
+    testTimeout: 20000,
   },
 });

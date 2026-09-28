@@ -1,13 +1,21 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LayoutDashboard } from 'lucide-react';
+import { LayoutDashboard, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 import { useOrderStore } from '../stores/orderStore.js';
 import { useMenuStore, LOW_STOCK_THRESHOLD } from '../stores/menuStore.js';
+import { useUIStore } from '../stores/uiStore.js';
 import { formatPeso, formatDateOnly, round2 } from '../utils/format.js';
 import { lastNDaysBounds, filterByBounds } from '../utils/dateRange.js';
 import { getMenuImagePath } from '../utils/menu.js';
 import { SalesTrendChart, PaymentDonut, TopItemsBar } from '../components/ReportCharts.jsx';
+import AnimatedNumber from '../components/AnimatedNumber.jsx';
+import {
+  loadDemoOrders,
+  saveDemoOrders,
+  clearDemoOrders,
+  generateDemoOrders,
+} from '../lib/demoHistory.js';
 
 const SALES_RANGE_OPTIONS = [7, 14, 30];
 
@@ -19,13 +27,24 @@ export default function AdminPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const orders = useOrderStore((s) => s.orders);
   const menuItems = useMenuStore((s) => s.items);
+  const showToast = useUIStore((s) => s.showToast);
 
   const [salesRange, setSalesRange] = useState(14);
+
+  // View-only demo data (presentation filler). Stored under its own key and
+  // merged ONLY into this page's chart inputs — it never enters the sync
+  // queue, so the cloud and the Orders ledger keep real data.
+  const [demoVersion, setDemoVersion] = useState(0);
+  const demoOrders = useMemo(() => loadDemoOrders(), [demoVersion]);
+  const viewOrders = useMemo(
+    () => (demoOrders.length ? [...demoOrders, ...orders] : orders),
+    [demoOrders, orders]
+  );
 
   // Every sales-derived number below is computed from this scoped set, so the
   // range buttons govern the whole page instead of just the trend chart.
   const bounds = useMemo(() => lastNDaysBounds(salesRange), [salesRange]);
-  const scoped = useMemo(() => filterByBounds(orders, bounds), [orders, bounds]);
+  const scoped = useMemo(() => filterByBounds(viewOrders, bounds), [viewOrders, bounds]);
 
   // The same-sized window immediately before the current one — the baseline
   // for the "▲/▼ % vs previous period" line on the sales card.
@@ -41,14 +60,14 @@ export default function AdminPage() {
     const today = formatDateOnly(new Date());
     // Deliberately all-time: the "Today" cards are labelled as today, and
     // today always falls inside the range window anyway.
-    const todayOrders = orders.filter(
+    const todayOrders = viewOrders.filter(
       (o) => String(o.created_at || '').slice(0, 10) === today
     );
     const totalSales = scoped.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
     const todaySales = todayOrders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
     // Previous window of the same length, immediately before the current one.
-    const prevScoped = filterByBounds(orders, prevBounds);
+    const prevScoped = filterByBounds(viewOrders, prevBounds);
     const prevSalesTotal = prevScoped.reduce(
       (sum, o) => sum + Number(o.total_amount || 0),
       0
@@ -158,7 +177,20 @@ export default function AdminPage() {
       rangeSalesTotal,
       salesDeltaPct,
     };
-  }, [orders, scoped, menuItems, salesRange, prevBounds]);
+  }, [viewOrders, scoped, menuItems, salesRange, prevBounds]);
+
+  const handleLoadDemo = () => {
+    const generated = generateDemoOrders({ menuItems });
+    saveDemoOrders(generated);
+    setDemoVersion((v) => v + 1);
+    showToast(`Demo ready — ${generated.length} sample orders added to the charts.`, 3200);
+  };
+
+  const handleClearDemo = () => {
+    clearDemoOrders();
+    setDemoVersion((v) => v + 1);
+    showToast('Demo data cleared — charts now show real orders only.', 2500);
+  };
 
   return (
     <div id="adminOverview" className="main-section active-section">
@@ -170,6 +202,38 @@ export default function AdminPage() {
           Business pulse for {currentUser?.name || 'the manager'}. Sales figures
           reflect the last {salesRange} days.
         </small>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          {demoOrders.length > 0 ? (
+            <>
+              <span className="text-muted text-xs">
+                Demo: {demoOrders.length} sample orders on charts
+              </span>
+              <button
+                type="button"
+                className="btn-outline-secondary-pos btn-sm-pos"
+                onClick={handleClearDemo}
+              >
+                Clear Demo Data
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn-outline-secondary-pos btn-sm-pos flex items-center gap-1"
+              onClick={handleLoadDemo}
+              title="Fills the charts with ~45 days of realistic sample orders — local-only, never synced to the cloud."
+            >
+              <Sparkles size={13} aria-hidden="true" /> Load Demo Data
+            </button>
+          )}
+        </div>
+        {demoOrders.length > 0 && (
+          <div className="alert-pos alert-info-pos text-sm mt-2 mb-0">
+            <strong>Demo data active</strong> — sample orders appear in the
+            charts on this screen only. The cloud database and the Orders
+            ledger keep real data.
+          </div>
+        )}
       </div>
 
       {/* Sales trend — headline chart first so it greets the manager */}
@@ -281,19 +345,25 @@ export default function AdminPage() {
         <div className="stagger-card" style={{ animationDelay: '0ms' }}>
           <div className="report-card report-blue">
             <div className="text-muted text-sm">Today's Sales</div>
-            <div className="report-value">{formatPeso(stats.todaySales)}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.todaySales} format={formatPeso} />
+            </div>
           </div>
         </div>
         <div className="stagger-card" style={{ animationDelay: '60ms' }}>
           <div className="report-card report-purple">
             <div className="text-muted text-sm">Today's Orders</div>
-            <div className="report-value">{stats.todayOrders}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.todayOrders} format={(n) => Math.round(n)} />
+            </div>
           </div>
         </div>
         <div className="stagger-card" style={{ animationDelay: '120ms' }}>
           <div className="report-card report-green">
             <div className="text-muted text-sm">Sales · Last {salesRange}d</div>
-            <div className="report-value">{formatPeso(stats.totalSales)}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.totalSales} format={formatPeso} />
+            </div>
             <div className="text-muted text-xs">{stats.totalOrders} orders</div>
             {stats.salesDeltaPct !== null && (
               <div
@@ -310,7 +380,9 @@ export default function AdminPage() {
         <div className="stagger-card" style={{ animationDelay: '180ms' }}>
           <div className="report-card report-orange">
             <div className="text-muted text-sm">Avg Order Value</div>
-            <div className="report-value">{formatPeso(stats.avgOrderValue)}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.avgOrderValue} format={formatPeso} />
+            </div>
           </div>
         </div>
         <div className="stagger-card" style={{ animationDelay: '240ms' }}>
@@ -328,7 +400,9 @@ export default function AdminPage() {
         <div className="stagger-card" style={{ animationDelay: '360ms' }}>
           <div className="report-card report-red">
             <div className="text-muted text-sm">Cancelled (Lost Revenue)</div>
-            <div className="report-value">{formatPeso(stats.lostRevenue)}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.lostRevenue} format={formatPeso} />
+            </div>
             <div className="text-muted text-xs">
               {stats.cancelledCount} cancelled order{stats.cancelledCount === 1 ? '' : 's'}
             </div>
@@ -337,7 +411,9 @@ export default function AdminPage() {
         <div className="stagger-card" style={{ animationDelay: '420ms' }}>
           <div className="report-card report-green">
             <div className="text-muted text-sm">Discounts Given</div>
-            <div className="report-value">{formatPeso(stats.discountTotal)}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.discountTotal} format={formatPeso} />
+            </div>
           </div>
         </div>
         <div className="stagger-card" style={{ animationDelay: '480ms' }}>

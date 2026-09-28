@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured, verifyPassword } from '../lib/supabase.js';
+import { useEmployeeStore } from './employeeStore.js';
 
 // Authentication & roles. With Supabase configured, the username login is
 // mapped to a Supabase Auth account and the session is managed by the
@@ -113,17 +114,34 @@ export const useAuthStore = create((set, get) => ({
 
   login: async ({ username, password }) => {
     const uname = String(username || '').trim().toLowerCase();
+    const pwd = String(password || '');
 
     if (isSupabaseConfigured && supabase) {
       const email = USERNAME_TO_EMAIL[uname];
       if (!email) {
+        console.warn('[auth] Unknown username:', uname);
         return null;
       }
+      console.log('[auth] Attempting Supabase login for:', email);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password: String(password || ''),
+        password: pwd,
       });
       if (error || !data?.user) {
+        console.warn('[auth] Supabase login failed:', error?.message);
+        // In development, fall back to local demo accounts so cashier can work without Supabase setup
+        if (import.meta.env.DEV) {
+          console.log('[auth] DEV mode: falling back to local demo accounts');
+          const account = ACCOUNTS.find(
+            (a) => a.username === uname && a.password === pwd
+          );
+          if (account) {
+            const user = { username: account.username, name: account.name, role: account.role };
+            set({ currentUser: user });
+            persistSession(user);
+            return user;
+          }
+        }
         return null;
       }
       const { user } = data;
@@ -132,26 +150,40 @@ export const useAuthStore = create((set, get) => ({
         .select('role, name')
         .eq('id', user.id)
         .maybeSingle();
+      const resolvedRole = profile?.role || roleFrom(user, user.email);
+      console.log('[auth] Supabase login success, role:', resolvedRole);
       const currentUser = {
         username: uname,
         email: user.email,
         name: profile?.name || user.user_metadata?.name || (uname === 'manager' ? 'Store Manager' : 'Main Cashier'),
-        role: profile?.role || roleFrom(user, user.email),
+        role: resolvedRole,
       };
       set({ currentUser });
       persistSession(currentUser);
       return currentUser;
     }
 
-    // Local fallback accounts.
-    const account = ACCOUNTS.find(
-      (a) =>
-        a.username === uname && a.password === String(password || '')
-    );
-    if (!account) {
+    // Local fallback mode (no Supabase).
+    // Manager uses demo account; cashier uses employee store PIN.
+    if (uname === 'manager') {
+      const account = ACCOUNTS.find(
+        (a) => a.username === uname && a.password === pwd
+      );
+      if (!account) return null;
+      const user = { username: account.username, name: account.name, role: account.role };
+      set({ currentUser: user });
+      persistSession(user);
+      return user;
+    }
+
+    // Cashier login via employee store PIN
+    const { verifyCashierPin } = useEmployeeStore.getState();
+    const result = verifyCashierPin(uname, pwd);
+    if (!result.valid) {
+      console.warn('[auth] Cashier login failed:', result.error);
       return null;
     }
-    const user = { username: account.username, name: account.name, role: account.role };
+    const user = { username: result.employee.name, name: result.employee.name, role: 'cashier' };
     set({ currentUser: user });
     persistSession(user);
     return user;

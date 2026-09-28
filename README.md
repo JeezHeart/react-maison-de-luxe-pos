@@ -220,7 +220,7 @@ Everything below is grouped by the screen you see in the app. Each entry states
 | **Sales trend chart** | Line/area chart of sales over time — hourly for Today, daily for Week/Month, monthly for All Time | Spotting busy hours and daily/weekly patterns |
 | **Top 5 selling items** | Bar chart + table of item name, quantity sold, revenue | Knowing what to promote or re-stock |
 | **Payment breakdown** | Donut chart + table: orders, total, and **% of sales** per payment method | Seeing how customers pay (helps float/cash management) |
-| **KPI cards** | Total Orders, Menu Items, Total Sales, Avg Order Value | The headline numbers at a glance |
+| **KPI cards** | Total Orders, Menu Items, Total Sales, Avg Order Value — values **count up** when a filter is applied | The headline numbers at a glance |
 | **Insights** | **Cancelled (lost revenue)**, **Discounts given**, and **Top cashier** for the period | Answering "how much did discounts cost us?" and staff performance |
 
 ### 6. Manager Overview (`/admin`)
@@ -233,6 +233,8 @@ Everything below is grouped by the screen you see in the app. Each entry states
 | **Insight KPIs** | **Cancelled orders = lost revenue**, **discounts given**, **top cashier** (orders + sales), menu item count, low-stock count | Spotting what is costing money and how staff are performing |
 | **Low-stock watchlist** | Items with stock ≤ 5, sorted most-critical first, with a link into Menu Management | Re-ordering ingredients before you run out |
 | **Charts** | Top sellers + payment mix (same charts as Reports) | Quick strategic view without digging |
+| **Animated KPIs** | Headline numbers (sales, orders, average order value, lost revenue, discounts) **roll up with a count-up animation** whenever the range switcher changes | The overview feels alive instead of static |
+| **Demo data** *(manager only)* | **Load Demo Data** fills the charts with ~45 days of realistic sample orders in one click; **Clear Demo Data** removes them. Demo orders are local-only and **never sync to the cloud**, and an on-screen note always flags when they're active | Making presentation charts full and convincing — the cloud + Orders ledger stay 100% real |
 
 ### 7. Settings (`/pos/settings` and `/admin/settings`)
 
@@ -265,7 +267,7 @@ These are system-wide behaviors, not tied to a single screen.
 | **Collision-safe order IDs** | New orders get a 16-digit numeric ID built from the current time + a per-device counter, strictly increasing on the device | Two registers can place orders at the exact same moment without ever losing one to a duplicate-ID error |
 | **Stock integrity** | The cart caps quantity to remaining stock; every order auto-deducts stock; every deleted order returns its stock; Supabase clamps `stock >= 0` | The system "never sells what it doesn't have" and bad deletes can't drain inventory |
 | **Undo on delete** | Deleting an order, menu item, or customer shows a 4-second **Undo** toast that re-inserts and re-syncs it | Accidental deletions are instantly reversible |
-| **Sync status badge** | A small dot in the header shows **Syncing… / Synced / Offline**; hidden entirely in pure-local mode | Staff can see whether changes are reaching the cloud |
+| **Sync status badge** | A dot in the header shows **Syncing… / Synced / Offline**, a live **pending count** ("Synced · 5 pending", "Offline · 3 saved here"), and the **last sync time** on hover; hidden entirely in pure-local mode | Staff can see whether changes are reaching the cloud or still queued locally |
 | **PWA / installable** | Manifest + service worker: the app can be installed to the home screen and opens with zero network after first visit | It behaves like a native register app on tablets/phones |
 | **Toasts** | Small notifications for every action (added / saved / deleted / undo) | Instant visual confirmation of what just happened |
 

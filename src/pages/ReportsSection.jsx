@@ -5,6 +5,8 @@ import { useMenuStore } from '../stores/menuStore.js';
 import { formatPeso, formatDateOnly, round2 } from '../utils/format.js';
 import { rangeBounds, filterByBounds } from '../utils/dateRange.js';
 import { SalesTrendChart, PaymentDonut, TopItemsBar } from '../components/ReportCharts.jsx';
+import AnimatedNumber from '../components/AnimatedNumber.jsx';
+import { loadDemoOrders } from '../lib/demoHistory.js';
 
 const RANGES = [
   { value: 'all', label: 'All Time' },
@@ -78,12 +80,17 @@ function buildTrend(filtered, reportRange) {
 export default function ReportsSection() {
   const orders = useOrderStore((s) => s.orders);
   const menuItems = useMenuStore((s) => s.items);
+  // Presentation filler from the Overview's "Load Demo Data" — view-only and
+  // local, never synced; flagged in the footer note below when active.
+  const demoOrders = loadDemoOrders();
+  const hasDemo = demoOrders.length > 0;
 
   const [reportRange, setReportRange] = useState('all');
   const [refreshKey, setRefreshKey] = useState(0);
 
   const stats = useMemo(() => {
-    const filtered = filterByBounds(orders, rangeBounds(reportRange));
+    const sourceOrders = hasDemo ? [...demoOrders, ...orders] : orders;
+    const filtered = filterByBounds(sourceOrders, rangeBounds(reportRange));
 
     const totalOrders = filtered.length;
     const totalSales = filtered.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
@@ -154,7 +161,7 @@ export default function ReportsSection() {
       discountTotal,
       topCashier,
     };
-  }, [orders, reportRange, menuItems, refreshKey]);
+  }, [orders, reportRange, menuItems, refreshKey, demoOrders]);
 
   const handleApply = (e) => {
     e.preventDefault();
@@ -307,7 +314,9 @@ export default function ReportsSection() {
         <div className="stagger-card" style={{ animationDelay: '0ms' }}>
           <div className="report-card report-blue">
             <div className="text-muted text-sm">Total Orders</div>
-            <div className="report-value">{stats.totalOrders}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.totalOrders} format={(n) => Math.round(n)} />
+            </div>
           </div>
         </div>
         <div className="stagger-card" style={{ animationDelay: '70ms' }}>
@@ -319,13 +328,17 @@ export default function ReportsSection() {
         <div className="stagger-card" style={{ animationDelay: '140ms' }}>
           <div className="report-card report-green">
             <div className="text-muted text-sm">Total Sales</div>
-            <div className="report-value">{formatPeso(stats.totalSales)}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.totalSales} format={formatPeso} />
+            </div>
           </div>
         </div>
         <div className="stagger-card" style={{ animationDelay: '210ms' }}>
           <div className="report-card report-orange">
             <div className="text-muted text-sm">Avg Order Value</div>
-            <div className="report-value">{formatPeso(stats.avgOrderValue)}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.avgOrderValue} format={formatPeso} />
+            </div>
           </div>
         </div>
       </div>
@@ -335,7 +348,9 @@ export default function ReportsSection() {
         <div className="stagger-card" style={{ animationDelay: '0ms' }}>
           <div className="report-card report-red">
             <div className="text-muted text-sm">Cancelled (Lost Revenue)</div>
-            <div className="report-value">{formatPeso(stats.lostRevenue)}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.lostRevenue} format={formatPeso} />
+            </div>
             <div className="text-muted text-xs">
               {rangeLabel} · {stats.cancelledCount} cancelled order
               {stats.cancelledCount === 1 ? '' : 's'}
@@ -345,7 +360,9 @@ export default function ReportsSection() {
         <div className="stagger-card" style={{ animationDelay: '70ms' }}>
           <div className="report-card report-green">
             <div className="text-muted text-sm">Discounts Given</div>
-            <div className="report-value">{formatPeso(stats.discountTotal)}</div>
+            <div className="report-value">
+              <AnimatedNumber value={stats.discountTotal} format={formatPeso} />
+            </div>
             <div className="text-muted text-xs">{rangeLabel}</div>
           </div>
         </div>
@@ -363,7 +380,8 @@ export default function ReportsSection() {
       </div>
 
       <div className="alert-pos alert-info-pos text-sm mt-3 mb-0">
-        Reports are filtered by selected date range and based on current database records.
+        Reports are filtered by selected date range and based on current database
+        records{hasDemo ? ' — demo sample data is included on this screen' : ''}.
       </div>
     </div>
   );

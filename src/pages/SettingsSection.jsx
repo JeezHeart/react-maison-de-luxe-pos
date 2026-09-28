@@ -5,6 +5,7 @@ import SystemSnapshotCard from '../components/settings/SystemSnapshotCard.jsx';
 import QuickRemindersCard from '../components/settings/QuickRemindersCard.jsx';
 import MenuManagementCard from '../components/settings/MenuManagementCard.jsx';
 import CustomerDirectoryCard from '../components/settings/CustomerDirectoryCard.jsx';
+import StaffManagementCard from '../components/settings/StaffManagementCard.jsx';
 
 // Settings screen: restaurant profile, system snapshot, and the two
 // manager-only panels (menu management, customer directory).
@@ -36,6 +37,7 @@ export default function SettingsSection() {
         </div>
       </div>
 
+      <StaffManagementCard isManager={isManager} className="mt-3" />
       <MenuManagementCard isManager={isManager} className="mt-3" />
       <CustomerDirectoryCard isManager={isManager} className="mt-3" />
     </div>

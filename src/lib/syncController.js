@@ -14,6 +14,7 @@ import { useOrderStore } from '../stores/orderStore.js';
 import { useMenuStore } from '../stores/menuStore.js';
 import { useCustomerStore } from '../stores/customerStore.js';
 import { useSettingsStore } from '../stores/settingsStore.js';
+import { useEmployeeStore } from '../stores/employeeStore.js';
 import { useAuthStore } from '../stores/authStore.js';
 
 let started = false;
@@ -71,6 +72,17 @@ async function enqueueLocalOnlyDiffs() {
       }
     }
   }
+
+  const localEmployees = useEmployeeStore.getState().employees;
+  if (localEmployees.length) {
+    const { data: remoteEmployees } = await supabase.from('employees').select('name');
+    const remoteNames = new Set((remoteEmployees || []).map((e) => e.name));
+    for (const employee of localEmployees) {
+      if (!remoteNames.has(employee.name)) {
+        enqueue({ table: 'employees', action: 'upsert', payload: employee });
+      }
+    }
+  }
 }
 
 async function runSync(reason = 'tick') {
@@ -92,6 +104,7 @@ async function runSync(reason = 'tick') {
       useMenuStore.getState().syncFromRemote(),
       useCustomerStore.getState().syncFromRemote(),
       useSettingsStore.getState().syncFromRemote(),
+      useEmployeeStore.getState().syncFromRemote(),
     ]);
 
     ui.setSyncState('online', Date.now());
@@ -108,6 +121,8 @@ async function runSync(reason = 'tick') {
     ui.setSyncState('offline');
   }
 }
+
+let visibilitySyncTimer = null;
 
 export function startSyncController() {
   if (started || !isSupabaseConfigured || typeof window === 'undefined') {
@@ -129,7 +144,7 @@ export function startSyncController() {
   });
 
   // New queued work (order placed, edit, delete, undo, restock…) triggers a
-  // sync within ~1.2s instead of waiting for the 30s tick — two registers
+  // sync within ~1.2s instead of waiting for the periodic tick — two registers
   // see each other's changes in near-real-time.
   let queueSyncTimer = null;
   onQueueChange(() => {
@@ -155,6 +170,14 @@ export function startSyncController() {
     }
   });
 
-  // Light periodic pass keeps the register in sync across devices.
-  timer = window.setInterval(() => runSync('tick'), 30_000);
+  // Sync when tab becomes visible (user returns) — debounced to avoid storms.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && useAuthStore.getState().currentUser) {
+      if (visibilitySyncTimer) clearTimeout(visibilitySyncTimer);
+      visibilitySyncTimer = setTimeout(() => runSync('visibility'), 800);
+    }
+  });
+
+  // Light periodic pass keeps the register in sync across devices (60s, down from 30s).
+  timer = window.setInterval(() => runSync('tick'), 60_000);
 }

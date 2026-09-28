@@ -118,23 +118,34 @@ export default function DashboardSection() {
                 : stock <= LOW_STOCK_THRESHOLD
                   ? `Low · ${stock} left`
                   : `${stock} in stock`;
+            // Stagger only on initial mount (index-based), not on filter/search.
+            // Use item.id for stable ordering so animation doesn't re-run when list changes.
+            const staggerDelay = (item.id % 20) * 45;
+            const imageUrl = getMenuImagePath(item.name);
             return (
               <div
                 key={item.id}
                 className="menu-card-wrapper stagger-card"
-                style={{ animationDelay: `${index * 45}ms` }}
+                style={{ animationDelay: `${staggerDelay}ms` }}
               >
                 <div
                   className={`food-card h-full product-click-card ${stock === 0 ? 'stock-empty' : ''}`}
                   onClick={() => setSelectedProduct(item)}
                 >
                   <span className={badgeClass}>{badgeText}</span>
-                  <img
-                    src={getMenuImagePath(item.name)}
-                    className="food-img"
-                    alt={item.name}
-                    loading="lazy"
-                  />
+                  <div className="food-img-wrapper">
+                    <img
+                      src={imageUrl}
+                      className="food-img"
+                      alt={item.name}
+                      loading="lazy"
+                      fetchpriority="low"
+                      onLoad={(e) => {
+                        e.currentTarget.classList.add('loaded');
+                      }}
+                    />
+                    <div className="food-img-placeholder" aria-hidden="true" />
+                  </div>
                   <div className="food-content">
                     <h6 className="food-title">{item.name}</h6>
                     <p className="food-desc">{item.description}</p>
