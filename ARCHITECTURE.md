@@ -9,6 +9,11 @@ deployment topology. Companion docs:
 - [README.md](./README.md) — user-facing feature & setup guide
 - [docs.md](./docs.md) — deep technical reference and ops runbook
 
+> **About the diagrams:** each diagram is committed as an **SVG image**
+> (`docs/img/`) so it renders in *any* Markdown viewer, with the Mermaid
+> source kept in a collapsible block beneath it for editing. Regenerate after
+> editing with `npm run render:diagrams`.
+
 ---
 
 ## 1. Architecture at a Glance
@@ -17,6 +22,11 @@ The system is fundamentally a **client-side, offline-first POS** that
 synchronizes to a **serverless cloud database**. There is no application
 server to operate: the "backend" is Supabase (Postgres + Auth + REST), and the
 entire business logic runs in the browser.
+
+<p align="center"><img src="docs/img/architecture-1.svg" alt="System architecture overview" style="max-width:100%"></p>
+
+<details>
+<summary>Mermaid source (edit, then <code>npm run render:diagrams</code> to refresh the SVG)</summary>
 
 ```mermaid
 flowchart TB
@@ -43,6 +53,8 @@ flowchart TB
     AUTH --> REST
     PW -. caches assets .-> UI
 ```
+
+</details>
 
 ### Key architectural decisions
 
@@ -82,6 +94,11 @@ src/
 
 ## 3. Core Flow — Placing an Order (offline-first end to end)
 
+<p align="center"><img src="docs/img/architecture-2.svg" alt="Placing an order — offline-first sequence" style="max-width:100%"></p>
+
+<details>
+<summary>Mermaid source (edit, then <code>npm run render:diagrams</code> to refresh the SVG)</summary>
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -93,21 +110,23 @@ sequenceDiagram
     participant SY as sync.js
     participant DB as Supabase
 
-    Cashier->>CS: add items / change qty
-    CS->>CS: clamp qty to remaining stock
-    Cashier->>OS: placeOrder(cart, payment…)
-    OS->>OS: nextOrderId() — collision-safe 16-digit
-    OS->>LS: persist order (instant — UI done)
-    OS->>MS: reduce stock locally
-    OS->>SY: enqueue({orders,insert}) + enqueue({stock,-qty})
-    SY-->>SY: onQueueChange() fires (~1.2s debounce)
-    SY->>DB: flushQueue(): insert order + items; apply_stock_movement(-qty)
-    DB-->>SY: ok (row + items saved, stock moved)
-    SY->>DB: pull all tables back down
-    DB-->>SY: current rows
-    SY->>OS: syncFromRemote() — merge (remote wins)
-    SY->>MS: syncFromRemote() — stock reconciled cross-register
+    Cashier->>CS: "add items / change qty"
+    CS->>CS: "clamp qty to remaining stock"
+    Cashier->>OS: "placeOrder(cart, payment…)"
+    OS->>OS: "nextOrderId() — collision-safe 16-digit"
+    OS->>LS: "persist order (instant — UI done)"
+    OS->>MS: "reduce stock locally"
+    OS->>SY: "enqueue({orders,insert}) + enqueue({stock,-qty})"
+    SY-->>SY: "onQueueChange() fires (~1.2s debounce)"
+    SY->>DB: "flushQueue(): insert order + items, apply_stock_movement(-qty)"
+    DB-->>SY: "ok (row + items saved, stock moved)"
+    SY->>DB: "pull all tables back down"
+    DB-->>SY: "current rows"
+    SY->>OS: "syncFromRemote() — merge (remote wins)"
+    SY->>MS: "syncFromRemote() — stock reconciled cross-register"
 ```
+
+</details>
 
 **Why this ordering matters:** the order id is assigned and the receipt is
 painted before any network I/O. If the network is down, steps 8–11 wait; the
@@ -117,6 +136,11 @@ loses nothing newer than the last successful flush.
 ---
 
 ## 4. The Sync Pass (state machine of a connected register)
+
+<p align="center"><img src="docs/img/architecture-3.svg" alt="Sync pass state machine" style="max-width:100%"></p>
+
+<details>
+<summary>Mermaid source (edit, then <code>npm run render:diagrams</code> to refresh the SVG)</summary>
 
 ```mermaid
 flowchart LR
@@ -128,6 +152,8 @@ flowchart LR
     P --> M[merge: remote wins after flush]
     M --> D[Done — next trigger: login / online / 30s / queue change]
 ```
+
+</details>
 
 **Triggers**
 
@@ -148,6 +174,11 @@ other, so one bad row can't wedge the register.
 
 ### 5.1 Why registers can't corrupt a shared counter
 
+<p align="center"><img src="docs/img/architecture-4.svg" alt="Atomic stock — two registers racing the last unit" style="max-width:100%"></p>
+
+<details>
+<summary>Mermaid source (edit, then <code>npm run render:diagrams</code> to refresh the SVG)</summary>
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -156,16 +187,18 @@ sequenceDiagram
     participant F as apply_stock_movement(name, -1)
     participant R as menu_items row (stock=1)
 
-    A->>F: apply(-1)  (both think stock=1)
-    B->>F: apply(-1)
-    F->>R: SELECT stock … FOR UPDATE (A grabs the row lock)
-    F->>R: stock 1 → 0
-    F-->>A: stock=0, shortfall=0 ✅
-    F->>R: B now reads stock=0 (blocked until A committed)
-    F->>R: 0 + (-1) → clamp at 0
-    F-->>B: stock=0, shortfall=1 ⚠️
-    B-->>B: sale recorded; toast "shortfall" → someone recounts
+    A->>F: "apply(-1)  (both think stock=1)"
+    B->>F: "apply(-1)"
+    F->>R: "SELECT stock … FOR UPDATE (A grabs the row lock)"
+    F->>R: "stock 1 → 0"
+    F-->>A: "stock=0, shortfall=0 ✅"
+    F->>R: "B now reads stock=0 (blocked until A committed)"
+    F->>R: "0 + (-1) → clamp at 0"
+    F-->>B: "stock=0, shortfall=1 ⚠️"
+    B-->>B: "sale recorded — toast 'shortfall' → someone recounts"
 ```
+
+</details>
 
 - The DB serialises concurrent movements with a **row lock**, so the second
   seller is told it "came up short" instead of silently driving the number
@@ -178,12 +211,19 @@ sequenceDiagram
 
 ### 5.2 Order ID uniqueness
 
+<p align="center"><img src="docs/img/architecture-5.svg" alt="Order ID construction" style="max-width:100%"></p>
+
+<details>
+<summary>Mermaid source (edit, then <code>npm run render:diagrams</code> to refresh the SVG)</summary>
+
 ```mermaid
 flowchart LR
     A["Date.now() × 1000"] --> I
     B["per-device random 100–999<br/>(persisted in localStorage)"] --> I
     I["16-digit bigint <br/>monotonic per device"] --> C["newest-first sort<br/>no collision between two devices<br/>in the same millisecond"]
 ```
+
+</details>
 
 ### 5.3 Conflict resolution
 
@@ -197,6 +237,11 @@ flowchart LR
 ---
 
 ## 6. Security Architecture
+
+<p align="center"><img src="docs/img/architecture-6.svg" alt="Security architecture" style="max-width:100%"></p>
+
+<details>
+<summary>Mermaid source (edit, then <code>npm run render:diagrams</code> to refresh the SVG)</summary>
 
 ```mermaid
 flowchart TB
@@ -216,6 +261,8 @@ flowchart TB
     App --> Runtime
 ```
 
+</details>
+
 - **Row Level Security** is the trust boundary: `anon` gets 401/403;
   `authenticated` (a real staff session) can read/write business tables.
 - **No hardcoded credentials**: staff passwords live in Supabase Auth; the
@@ -230,6 +277,11 @@ flowchart TB
 ---
 
 ## 7. Deployment Architecture
+
+<p align="center"><img src="docs/img/architecture-7.svg" alt="Deployment architecture" style="max-width:100%"></p>
+
+<details>
+<summary>Mermaid source (edit, then <code>npm run render:diagrams</code> to refresh the SVG)</summary>
 
 ```mermaid
 flowchart LR
@@ -247,6 +299,8 @@ flowchart LR
     V -->|REST + JWT| SUP[("Supabase<br/>iqrfcdrhsgtyxijdpicl")]
     R --> SUP
 ```
+
+</details>
 
 - Both hosts serve the **same static bundle** — the app is host-agnostic by
   design (PWA + REST). Vercel is primary; Render is a redundant, free,
@@ -290,5 +344,7 @@ flowchart LR
 
 ---
 
-*Maison de Luxe POS — react Vite PWA + Supabase. Diagrams render on GitHub
-(Mermaid), README/docs for context.*
+*Maison de Luxe POS — react Vite PWA + Supabase. Diagrams live as SVG images
+(`docs/img/`, regenerated from the Mermaid source above with
+`npm run render:diagrams`), so they display in any Markdown viewer.
+See README/docs for context.*

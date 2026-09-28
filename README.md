@@ -420,6 +420,7 @@ npm run seed:auth       # staff accounts (cashier@ / manager@maison.de.luxe)
 | `npm run restore:menu` | Restore the seeded menu from bundled data |
 | `npm run repair:menu-seq` | Repair the menu identity sequence drift |
 | `npm run assets:sizes` | List every image with its dimensions, file size and bytes-per-pixel |
+| `npm run render:diagrams` | Re-render the Mermaid diagrams in `ARCHITECTURE.md` to SVG images (`docs/img/`) via mermaid.ink |
 
 `test:sync` and `test:smoke` load `.env` automatically and clean up after
 themselves (restore menu stock, delete probe rows). Every script that signs in

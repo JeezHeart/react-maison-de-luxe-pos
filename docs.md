@@ -278,6 +278,7 @@ the second run); only the seed *scripts* are safe to re-run.
 | Restore menu | `npm run restore:menu -- --apply` | `SUPABASE_SECRET_KEY` |
 | Repair menu sequence | `npm run repair:menu-seq` | `SUPABASE_SECRET_KEY` |
 | Image audit | `npm run assets:sizes` | none |
+| Diagram render | `npm run render:diagrams` | none (uses public mermaid.ink; writes `docs/img/*.svg`) |
 
 `seed:auth` is create-only: it does **not** overwrite an existing account's
 password (Supabase rejects duplicate emails). To rotate, use the dashboard

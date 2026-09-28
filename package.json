@@ -17,7 +17,8 @@
     "test:unit": "vitest run",
     "check:live": "node --env-file=.env scripts/check-live.mjs",
     "set:staff-passwords": "node scripts/set-staff-passwords.mjs",
-    "assets:sizes": "node scripts/image-size.mjs"
+    "assets:sizes": "node scripts/image-size.mjs",
+    "render:diagrams": "node scripts/render-diagrams.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.1",
