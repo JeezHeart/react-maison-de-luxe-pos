@@ -1,0 +1,17 @@
+# Render Blueprint — deploy as a Static Site (free, always-on).
+# Optionally also works as a Web Service via the existing Dockerfile.
+services:
+  - type: web
+    name: maisondeluxe-pos
+    runtime: static
+    repo: https://github.com/JeezHeart/react-maison-de-luxe-pos.git
+    branch: main
+    healthCheckPath: /
+    buildCommand: npm run build
+    staticPublishPath: ./dist
+    envVars:
+      # Public values only — safe to commit (same keys used on Vercel).
+      - key: VITE_SUPABASE_URL
+        value: https://iqrfcdrhsgtyxijdpicl.supabase.co
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_zxU5irampP_Veztvci0iGg_qWyJcHQ9
