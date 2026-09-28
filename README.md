@@ -583,14 +583,17 @@ missing, and exercises the real two-simultaneous-sales case once it is there.
 
 ## Known Limitations (Honest Notes)
 
-1. **Concurrent last-unit sales across registers.** The cart blocks overselling
-   *per register* and the database clamps `stock >= 0`, but two registers that
-   both still show stock `1` for the same item — **within the same ~1.2s sync
-   window** — can both sell it. No order is ever lost or corrupted; the shared
-   stock can merely read one unit too high until a manual count corrects it.
-   Fully closing that window needs a server-side atomic step (a Supabase SQL
-   function/RPC or Realtime), i.e. a small migration applied from the Supabase
-   dashboard — the fix is designed and ready to wire in.
+1. **Concurrent last-unit sales across registers — now closed.** This was a
+   silent lost-update bug, fixed by `supabase/migrations/0003_atomic_stock.sql`:
+   stock is only ever *moved* through the row-locked `apply_stock_movement()`
+   database function, never overwritten with an absolute value. Two registers
+   that sell the same last unit now get `satisfied=1 refused=1`, the stock
+   floors at `0`, and the app raises a shortfall toast naming the item.
+   **Verified live: `npm run test:sync` exercises the real two-simultaneous-sales
+   case.** If `0003` is not yet applied on a given deployment, the app detects
+   the missing function and falls back to the older non-atomic write with a
+   console warning — so a deploy can land before the migration, but the race
+   stays open until it is applied.
 
 2. **React Router dependency advisories.** `npm audit` reports two *moderate*
    advisories on `react-router-dom` 6.x. Fixing them requires a breaking v7
