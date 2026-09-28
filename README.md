@@ -227,11 +227,13 @@ Everything below is grouped by the screen you see in the app. Each entry states
 
 | Feature | What it does | Used for |
 |---|---|---|
-| **Sales range switcher** | 7 / 14 / 30-day trend | The last week, fortnight, or month of revenue |
-| **Today's numbers** | Orders and sales today, live totals, average order value | Morning/evening business check |
-| **Low-stock watchlist** | Items with stock ≤ 5, sorted most-critical first | Re-ordering ingredients before you run out |
+| **Sales range switcher** | 7 / 14 / 30-day trend; the buttons govern the **whole page**, not just the chart | The last week, fortnight, or month of revenue |
+| **Today's numbers** | Orders, sales, and average order value for today | Morning/evening business check |
+| **Sales vs previous period** | The range total with an **▲/▼ % comparison** against the same-length window right before it | Knowing at a glance whether business is up or down |
+| **Insight KPIs** | **Cancelled orders = lost revenue**, **discounts given**, **top cashier** (orders + sales), menu item count, low-stock count | Spotting what is costing money and how staff are performing |
+| **Low-stock watchlist** | Items with stock ≤ 5, sorted most-critical first, with a link into Menu Management | Re-ordering ingredients before you run out |
 | **Charts** | Top sellers + payment mix (same charts as Reports) | Quick strategic view without digging |
-| **Recent orders** | The latest 5 transactions with a link into full order management | Seeing what just came in |
+| **Recent orders** | The latest 5 transactions, **Export CSV of the selected range**, and a link into full order management | Seeing what just came in and taking the numbers elsewhere |
 
 ### 7. Settings (`/pos/settings` and `/admin/settings`)
 

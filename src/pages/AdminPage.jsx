@@ -30,6 +30,16 @@ export default function AdminPage() {
   const bounds = useMemo(() => lastNDaysBounds(salesRange), [salesRange]);
   const scoped = useMemo(() => filterByBounds(orders, bounds), [orders, bounds]);
 
+  // The same-sized window immediately before the current one — the baseline
+  // for the "▲/▼ % vs previous period" line on the sales card.
+  const prevBounds = useMemo(() => {
+    const start = new Date();
+    start.setDate(start.getDate() - (2 * salesRange - 1));
+    const end = new Date();
+    end.setDate(end.getDate() - salesRange);
+    return { start: formatDateOnly(start), end: formatDateOnly(end) };
+  }, [salesRange]);
+
   // Export the same window the page is showing, never the full order list.
   const handleExport = () => {
     const count = exportOrdersCsv(scoped, { label: `last${salesRange}d` });
@@ -49,6 +59,18 @@ export default function AdminPage() {
     );
     const totalSales = scoped.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
     const todaySales = todayOrders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+
+    // Previous window of the same length, immediately before the current one.
+    const prevScoped = filterByBounds(orders, prevBounds);
+    const prevSalesTotal = prevScoped.reduce(
+      (sum, o) => sum + Number(o.total_amount || 0),
+      0
+    );
+    // null = no prior data to compare against (first days of operation).
+    const salesDeltaPct =
+      prevSalesTotal > 0
+        ? ((totalSales - prevSalesTotal) / prevSalesTotal) * 100
+        : null;
 
     // Top 5 selling menu items.
     const itemMap = new Map();
@@ -148,8 +170,9 @@ export default function AdminPage() {
       topCashier,
       dailySales,
       rangeSalesTotal,
+      salesDeltaPct,
     };
-  }, [orders, scoped, menuItems, salesRange]);
+  }, [orders, scoped, menuItems, salesRange, prevBounds]);
 
   return (
     <div id="adminOverview" className="main-section active-section">
@@ -286,6 +309,16 @@ export default function AdminPage() {
             <div className="text-muted text-sm">Sales · Last {salesRange}d</div>
             <div className="report-value">{formatPeso(stats.totalSales)}</div>
             <div className="text-muted text-xs">{stats.totalOrders} orders</div>
+            {stats.salesDeltaPct !== null && (
+              <div
+                className={`text-xs mt-1 font-semibold ${
+                  stats.salesDeltaPct >= 0 ? 'trend-up-text' : 'trend-down-text'
+                }`}
+              >
+                {stats.salesDeltaPct >= 0 ? '▲' : '▼'}{' '}
+                {Math.abs(stats.salesDeltaPct).toFixed(1)}% vs previous {salesRange}d
+              </div>
+            )}
           </div>
         </div>
         <div className="stagger-card" style={{ animationDelay: '180ms' }}>

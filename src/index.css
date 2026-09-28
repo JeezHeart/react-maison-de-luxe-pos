@@ -1622,6 +1622,14 @@ img.landing-brand-mark.brand-logo-img {
   color: #e8b86d;
 }
 
+.trend-up-text {
+  color: #7dd18a;
+}
+
+.trend-down-text {
+  color: #e07a5f;
+}
+
 /* ---------- admin dashboard ---------- */
 .admin-wrap {
   width: 100%;
