@@ -208,7 +208,7 @@ Everything below is grouped by the screen you see in the app. Each entry states
 | **Kanban board view** | Three columns — **Pending / Completed / Cancelled** — with order cards; **drag a card** between columns to change its status | Visually managing the kitchen/service pipeline |
 | **View (details card)** | Opens a sliding detail card with full order breakdown (sold items, prices, totals, cash/change, discount) | Inspecting a specific transaction |
 | **Receipt** | Opens the printable receipt in a new tab (`/receipt/:id`) | Handing a customer their receipt or printing |
-| **Export CSV** | Downloads the orders as a `.csv` file (same columns as the table), generated entirely in the browser. On the Orders page that is the full ledger; **on the manager overview it is only the range currently selected**, and the filename is tagged with it (e.g. `orders_export_2026-09-26_last14d.csv`) | Bookkeeping, Excel analysis, accountant hand-off — a file always says which period it covers |
+| **Export CSV** | Downloads the orders as a `.csv` file (same columns as the table), generated entirely in the browser; the filename carries the export date (e.g. `orders_export_2026-09-26.csv`) | Bookkeeping, Excel analysis, accountant hand-off |
 | **Delete order** | Removes the order *and automatically restores the sold stock* to inventory; shows a 4-second **Undo** toast | Correcting a mistaken/fake sale without losing inventory |
 | **Manager PIN gate** | Cashier deletes require the manager's PIN (valid 5 minutes) | Preventing a cashier from removing sale records on their own |
 
@@ -233,7 +233,6 @@ Everything below is grouped by the screen you see in the app. Each entry states
 | **Insight KPIs** | **Cancelled orders = lost revenue**, **discounts given**, **top cashier** (orders + sales), menu item count, low-stock count | Spotting what is costing money and how staff are performing |
 | **Low-stock watchlist** | Items with stock ≤ 5, sorted most-critical first, with a link into Menu Management | Re-ordering ingredients before you run out |
 | **Charts** | Top sellers + payment mix (same charts as Reports) | Quick strategic view without digging |
-| **Recent orders** | The latest 5 transactions, **Export CSV of the selected range**, and a link into full order management | Seeing what just came in and taking the numbers elsewhere |
 
 ### 7. Settings (`/pos/settings` and `/admin/settings`)
 

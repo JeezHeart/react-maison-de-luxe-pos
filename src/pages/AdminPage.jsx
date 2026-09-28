@@ -3,25 +3,22 @@ import { Link } from 'react-router-dom';
 import { LayoutDashboard } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 import { useOrderStore } from '../stores/orderStore.js';
-import { useUIStore } from '../stores/uiStore.js';
 import { useMenuStore, LOW_STOCK_THRESHOLD } from '../stores/menuStore.js';
 import { formatPeso, formatDateOnly, round2 } from '../utils/format.js';
 import { lastNDaysBounds, filterByBounds } from '../utils/dateRange.js';
 import { getMenuImagePath } from '../utils/menu.js';
-import { exportOrdersCsv } from '../utils/csv.js';
 import { SalesTrendChart, PaymentDonut, TopItemsBar } from '../components/ReportCharts.jsx';
 
 const SALES_RANGE_OPTIONS = [7, 14, 30];
 
 // Manager overview — sales trend, top sellers and payment mix charts on
-// top, then headline KPIs, low-stock watchlist and recent orders.
+// top, then headline KPIs and the low-stock watchlist.
 // Managers oversee from here; checkout happens in the cashier register
 // under /pos.
 export default function AdminPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const orders = useOrderStore((s) => s.orders);
   const menuItems = useMenuStore((s) => s.items);
-  const showToast = useUIStore((s) => s.showToast);
 
   const [salesRange, setSalesRange] = useState(14);
 
@@ -39,16 +36,6 @@ export default function AdminPage() {
     end.setDate(end.getDate() - salesRange);
     return { start: formatDateOnly(start), end: formatDateOnly(end) };
   }, [salesRange]);
-
-  // Export the same window the page is showing, never the full order list.
-  const handleExport = () => {
-    const count = exportOrdersCsv(scoped, { label: `last${salesRange}d` });
-    showToast(
-      count === 0
-        ? `No orders in the last ${salesRange} days — nothing exported.`
-        : `Exported ${count} order${count === 1 ? '' : 's'} from the last ${salesRange} days.`
-    );
-  };
 
   const stats = useMemo(() => {
     const today = formatDateOnly(new Date());
@@ -163,7 +150,6 @@ export default function AdminPage() {
       lowStockItems,
       topItems,
       paymentRows,
-      recentOrders: orders.slice(0, 5),
       cancelledCount: cancelledOrders.length,
       lostRevenue,
       discountTotal,
@@ -367,96 +353,43 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Low stock + recent orders */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
-        <div>
-          <div className="report-card h-full">
-            <div className="flex items-center justify-between mb-2">
-              <h6 className="m-0">Low Stock Watchlist</h6>
-              <Link className="btn-outline-secondary-pos btn-sm-pos" to="/admin/settings">
-                Manage Menu
-              </Link>
-            </div>
-            {stats.lowStockItems.length > 0 ? (
-              <div>
-                {stats.lowStockItems.map((item) => (
-                  <div key={item.id} className="order-item-preview flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <img
-                        src={getMenuImagePath(item.name)}
-                        alt={item.name}
-                        className="order-item-thumb"
-                      />
-                      <div className="text-sm">
-                        {item.name}
-                        <div className="text-muted text-xs">{item.category}</div>
-                      </div>
+      {/* Low stock — the manager's at-a-glance reorder view */}
+      <div className="mt-3">
+        <div className="report-card">
+          <div className="flex items-center justify-between mb-2">
+            <h6 className="m-0">Low Stock Watchlist</h6>
+            <Link className="btn-outline-secondary-pos btn-sm-pos" to="/admin/settings">
+              Manage Menu
+            </Link>
+          </div>
+          {stats.lowStockItems.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3">
+              {stats.lowStockItems.map((item) => (
+                <div key={item.id} className="order-item-preview flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <img
+                      src={getMenuImagePath(item.name)}
+                      alt={item.name}
+                      className="order-item-thumb"
+                    />
+                    <div className="text-sm">
+                      {item.name}
+                      <div className="text-muted text-xs">{item.category}</div>
                     </div>
-                    <span
-                      className={`text-sm font-semibold ${
-                        Number(item.stock) === 0 ? 'stock-out-text' : 'stock-low-text'
-                      }`}
-                    >
-                      {Number(item.stock) === 0 ? 'Out of stock' : `${item.stock} left`}
-                    </span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted text-sm m-0">All items are well stocked.</p>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <div className="report-card h-full">
-            <div className="flex items-center justify-between mb-2">
-              <h6 className="m-0">Recent Orders</h6>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="btn-outline-secondary-pos btn-sm-pos"
-                  onClick={handleExport}
-                  title={`Export the orders from the last ${salesRange} days`}
-                >
-                  Export CSV
-                </button>
-                <Link className="btn-outline-secondary-pos btn-sm-pos" to="/admin/orders">
-                  View All
-                </Link>
-              </div>
+                  <span
+                    className={`text-sm font-semibold ${
+                      Number(item.stock) === 0 ? 'stock-out-text' : 'stock-low-text'
+                    }`}
+                  >
+                    {Number(item.stock) === 0 ? 'Out of stock' : `${item.stock} left`}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div className="overflow-x-auto">
-              <table className="table-pos report-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Customer</th>
-                    <th>Payment</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.recentOrders.length > 0 ? (
-                    stats.recentOrders.map((o) => (
-                      <tr key={o.id}>
-                        <td>#{o.id}</td>
-                        <td>{o.customer_name}</td>
-                        <td>{o.payment_method}</td>
-                        <td>{formatPeso(o.total_amount)}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="text-muted">
-                        No orders yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          ) : (
+            <p className="text-muted text-sm m-0">All items are well stocked.</p>
+          )}
         </div>
       </div>
     </div>
