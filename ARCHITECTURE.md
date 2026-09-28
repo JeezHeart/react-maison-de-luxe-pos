@@ -252,8 +252,10 @@ flowchart LR
   design (PWA + REST). Vercel is primary; Render is a redundant, free,
   always-on demo URL.
 - Build-time env vars (public only) are identical on both hosts.
-- Render specifics handled via dashboard rules: SPA rewrite (`/* → /index.html`)
-  and a `Content-Type` header for the manifest.
+- Render specifics are declared in `render.yaml`: the SPA fallback is a
+  blueprint `routes` rewrite (`/* → /index.html`), so deep links work with no
+  dashboard setup; the manifest `Content-Type` is a dashboard Custom Header
+  rule (or an equivalent blueprint `headers:` block).
 - Migrations are applied from the Supabase dashboard (not by the hosts).
 
 ---

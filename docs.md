@@ -334,15 +334,18 @@ Each check: page responds → logo served at web size → anonymous read refused
 - `render.yaml` at the repo root defines a **static site** (`maisondeluxe-pos`),
   build `npm run build`, publish dir `dist`, same two public env vars.
 - Render serves `<name>.onrender.com` on a free, always-on static plan.
-- The repo's `public/_redirects` is **not** honored by Render; SPA fallback is a
-  dashboard rule (see 11.3). The file is harmless to ship (it activates if the
-  build is ever hosted on Netlify).
+- The blueprint declares the **SPA fallback as a route** (`routes: [rewrite
+  /* → /index.html]`), so deep links (`/pos`, `/login`, `/receipt/:id`) work
+  with zero dashboard setup — the rule auto-applies on every deploy.
+- The repo's `public/_redirects` is **not** honored by Render (it reads the
+  blueprint/dashboard rules instead). The file is harmless to ship (it
+  activates if the build is ever hosted on Netlify).
 
-### 11.3 Render dashboard rules (one-time)
-| Section | Rule |
-|---|---|
-| **Redirects/Rewrites** | Source `/*` → Destination `/index.html` → **Rewrite** (makes `/pos`, `/login`, `/receipt/:id` work) |
-| **Custom Headers** | Path `/manifest.webmanifest` → `Content-Type: application/manifest+json` (keeps the PWA installable) |
+### 11.3 Render routing & headers
+| Concern | Where it's declared | Rule |
+|---|---|---|
+| SPA fallback | **`render.yaml` blueprint routes** (auto-applied each deploy) — or the equivalent dashboard **Redirects/Rewrites** rule when not using the blueprint | Source `/*` → Destination `/index.html` → **Rewrite** |
+| Manifest MIME type | Dashboard **Custom Headers** (one-time); can equivalently be added as a blueprint `headers:` block | Path `/manifest.webmanifest` → `Content-Type: application/manifest+json` |
 
 Render only applies rules to **non-existent paths**, so real files (assets,
 `sw.js`) are served normally.

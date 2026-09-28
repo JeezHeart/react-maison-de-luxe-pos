@@ -6,9 +6,15 @@ services:
     runtime: static
     repo: https://github.com/JeezHeart/react-maison-de-luxe-pos.git
     branch: main
-    healthCheckPath: /
     buildCommand: npm run build
     staticPublishPath: ./dist
+    # SPA fallback for react-router (BrowserRouter): serve index.html for any
+    # path that isn't a real file. Vercel does this via vercel.json rewrites;
+    # Render ignores public/_redirects and only reads these rules.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       # Public values only — safe to commit (same keys used on Vercel).
       - key: VITE_SUPABASE_URL
