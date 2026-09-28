@@ -23,6 +23,9 @@ restaurant settings — and it keeps working even with **no internet connection*
 > configured, and they are not listed here because the source is public. See
 > `ACCOUNTS` in `src/stores/authStore.js`.
 
+> **Related docs:** [`ARCHITECTURE.md`](./ARCHITECTURE.md) — system architecture
+> with diagrams · [`docs.md`](./docs.md) — deep technical reference & ops runbook.
+
 ---
 
 ## Table of Contents
