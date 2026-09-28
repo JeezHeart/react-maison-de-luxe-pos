@@ -35,16 +35,17 @@ restaurant settings — and it keeps working even with **no internet connection*
 3. [Feature & Function Guide](#feature--function-guide)
 4. [Cross-Cutting Systems](#cross-cutting-systems)
 5. [Tech Stack](#tech-stack)
-6. [Architecture & Data Flow](#architecture--data-flow)
-7. [Database Schema](#database-schema)
-8. [Project Structure](#project-structure)
-9. [Setup (Run Locally)](#setup-run-locally)
-10. [Available Scripts](#available-scripts)
-11. [Testing & Quality Assurance](#testing--quality-assurance)
-12. [Deployment (Vercel)](#deployment-vercel)
-13. [Security & Keys](#security--keys)
-14. [Data & Persistence Details](#data--persistence-details)
-15. [Known Limitations (Honest Notes)](#known-limitations-honest-notes)
+6. [The Backend (No Custom Server)](#the-backend-no-custom-server)
+7. [Architecture & Data Flow](#architecture--data-flow)
+8. [Database Schema](#database-schema)
+9. [Project Structure](#project-structure)
+10. [Setup (Run Locally)](#setup-run-locally)
+11. [Available Scripts](#available-scripts)
+12. [Testing & Quality Assurance](#testing--quality-assurance)
+13. [Deployment (Vercel)](#deployment-vercel)
+14. [Security & Keys](#security--keys)
+15. [Data & Persistence Details](#data--persistence-details)
+16. [Known Limitations (Honest Notes)](#known-limitations-honest-notes)
 
 ---
 
@@ -253,6 +254,70 @@ These are system-wide behaviors, not tied to a single screen.
 | PWA | `vite-plugin-pwa` (manifest + generated service worker) |
 | Tests | Vitest (unit), Node integration scripts (live DB) |
 | Deployment | Vercel (Git integration on `main`) + optional Docker/Nginx |
+
+---
+
+## The Backend (No Custom Server)
+
+This project deliberately has **no application server of its own**. There is no
+Express/FastAPI/Django API to deploy or maintain; the "backend" role is
+provided entirely by **Supabase**, a managed cloud platform, which the browser
+talks to directly over HTTPS. The web hosts (Vercel, Render) only serve the
+compiled static app — they never execute business logic.
+
+### What plays the backend role
+
+| Classic backend piece | What this project uses instead |
+|---|---|
+| Web / API server | **None** — the browser calls Supabase's REST API directly |
+| REST API | **PostgREST** — auto-generated from the database schema; zero API code to write |
+| Database | **PostgreSQL** (hosted in the Supabase cloud) — the shared source of truth |
+| Authentication | **Supabase Auth** — staff accounts (`cashier` / `manager`), password sign-in, JWT sessions |
+| Authorization | **Row Level Security (RLS)** policies on every business table |
+| Server-side logic | A few **Postgres SQL functions** in `supabase/migrations/` — the only "backend code" in the repo |
+| Admin / seeding operations | Node scripts run locally with the Secret key (never deployed) |
+
+### Where the backend code actually lives
+
+The entire backend is declarative SQL, applied to the database once via the
+Supabase dashboard (SQL Editor). It lives in **`supabase/migrations/`**:
+
+| File | Contents |
+|---|---|
+| `0001_initial_schema.sql` | Tables (`menu_items`, `orders`, `order_items`, `customers`, `settings`, `profiles`), check constraints, **RLS policies**, role grants |
+| `0002_seed_data.sql` | Seed rows for the cloud database |
+| `0003_atomic_stock.sql` | Stored functions `apply_stock_movement(name, ±qty)` (row-locked, clamped at 0, returns shortfall) and `set_menu_item_stock(name, count)` |
+
+These functions run **inside the database** (PL/pgSQL), so they behave like
+stored-procedure endpoints — the browser invokes them through the REST layer,
+and Postgres serialises the critical stock updates itself.
+
+### How a request flows (no server in between)
+
+```
+ Browser (supabase-js, JWT session)
+        │  HTTPS
+        ▼
+ PostgREST (Supabase REST layer) ── RLS checks who you are ──┐
+        ▼                                                     │
+ PostgreSQL  ◀────────────────────────────────────────────────┘
+   executes the query / atomic function → returns rows → browser
+```
+
+- `src/lib/supabase.js` creates the Supabase client from the public
+  `VITE_SUPABASE_URL` + publishable key.
+- The offline-first sync layer queues writes locally, then flushes them to
+  Postgres as REST calls; it pulls everything back down afterwards.
+- Security: callers without a staff session (`anon`) get 401/403; only
+  `authenticated` staff sessions can read or write business data.
+
+### What is NOT the backend
+
+- **Vercel / Render** — static file hosts only; they serve the built React app
+  (the optional `Dockerfile`-based Nginx wrapper for Render's Web Service
+  option serves the same static files, no business logic).
+- **localStorage** — the browser-side cache/queue that keeps the POS usable
+  offline; it is part of the *client*, not the server.
 
 ---
 
